@@ -5,6 +5,7 @@
   "description": "Chrome extension prototype for MES EOL/MRI workflow automation.",
   "permissions": ["storage", "tabs", "activeTab"],
   "host_permissions": [
+    "https://internalfb.com/inventory/manufacturing/reverse/triage*",
     "https://www.internalfb.com/inventory/manufacturing/reverse/triage*"
   ],
   "action": {
@@ -17,6 +18,7 @@
   "content_scripts": [
     {
       "matches": [
+        "https://internalfb.com/inventory/manufacturing/reverse/triage*",
         "https://www.internalfb.com/inventory/manufacturing/reverse/triage*"
       ],
       "js": [

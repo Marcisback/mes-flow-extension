@@ -7,7 +7,7 @@
 <body>
   <header>
     <h1>MES Flow Assistant</h1>
-    <p id="pageStatus">Checking page...</p>
+    <p id="pageStatus">Ready</p>
   </header>
 
   <label for="modeSelect">Mode</label>
@@ -16,11 +16,14 @@
     <option value="MRI" disabled>MRI - coming soon</option>
   </select>
 
-  <label for="assetsBox">Assets</label>
+  <div class="label-row">
+    <label for="assetsBox">Assets</label>
+    <span id="autosaveStatus">Autosaved</span>
+  </div>
+
   <textarea id="assetsBox" placeholder="IT1234567&#10;IT2345678"></textarea>
 
   <div class="row">
-    <button id="saveBtn">Save</button>
     <button id="clearBtn">Clear</button>
   </div>
 
@@ -30,18 +33,20 @@
   </div>
 
   <section class="stats">
-    <div>
+    <button class="stat-card active" id="totalCard">
       <strong id="totalCount">0</strong>
       <span>Total</span>
-    </div>
-    <div>
+    </button>
+
+    <button class="stat-card" id="doneCard">
       <strong id="completedCount">0</strong>
       <span>Done</span>
-    </div>
-    <div>
+    </button>
+
+    <button class="stat-card" id="skippedCard">
       <strong id="skippedCount">0</strong>
       <span>Skipped</span>
-    </div>
+    </button>
   </section>
 
   <pre id="logBox"></pre>

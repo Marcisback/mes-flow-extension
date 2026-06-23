@@ -30,6 +30,23 @@ label {
   color: #a8b3c4;
 }
 
+.label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.label-row label {
+  margin: 0 0 6px;
+}
+
+#autosaveStatus {
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: #8b949e;
+}
+
 textarea,
 select {
   width: 100%;
@@ -85,8 +102,8 @@ button.danger {
   margin-top: 12px;
 }
 
-.stats div {
-  flex: 1;
+.stat-card {
+  margin-top: 0;
   background: #1d2027;
   border: 1px solid #303642;
   border-radius: 8px;
@@ -94,12 +111,17 @@ button.danger {
   text-align: center;
 }
 
-.stats strong {
+.stat-card.active {
+  border-color: #58a6ff;
+  background: #202938;
+}
+
+.stat-card strong {
   display: block;
   font-size: 18px;
 }
 
-.stats span {
+.stat-card span {
   color: #a8b3c4;
   font-size: 11px;
 }

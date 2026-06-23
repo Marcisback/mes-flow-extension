@@ -1,81 +1,174 @@
-const TARGET_URL_PREFIX =
-  "https://www.internalfb.com/inventory/manufacturing/reverse/triage";
+const TARGET_PATH = "/inventory/manufacturing/reverse/triage";
 
 const assetsBox = document.getElementById("assetsBox");
 const modeSelect = document.getElementById("modeSelect");
-const saveBtn = document.getElementById("saveBtn");
 const clearBtn = document.getElementById("clearBtn");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 const pageStatus = document.getElementById("pageStatus");
+const autosaveStatus = document.getElementById("autosaveStatus");
 const totalCount = document.getElementById("totalCount");
 const completedCount = document.getElementById("completedCount");
 const skippedCount = document.getElementById("skippedCount");
 const logBox = document.getElementById("logBox");
 
-function parseAssets(text) {
-  return [...new Set(
-    text
-      .split("\n")
-      .map((x) => x.trim())
-      .filter((x) => x && !x.startsWith("#"))
-  )];
+const totalCard = document.getElementById("totalCard");
+const doneCard = document.getElementById("doneCard");
+const skippedCard = document.getElementById("skippedCard");
+
+let currentLogView = "total";
+let autosaveTimer = null;
+let isLoadingInitialState = true;
+
+let lastState = {
+  assets: [],
+  completed: [],
+  skipped: [],
+  running: false,
+  mode: "EOL",
+  runtimeLog: ""
+};
+
+pageStatus.textContent = "Ready";
+
+function isTargetPage(url) {
+  try {
+    const parsed = new URL(url);
+
+    return (
+      (parsed.hostname === "internalfb.com" ||
+        parsed.hostname === "www.internalfb.com") &&
+      parsed.pathname === TARGET_PATH
+    );
+  } catch {
+    return false;
+  }
 }
 
-function log(message) {
-  const time = new Date().toLocaleTimeString();
-  logBox.textContent += `[${time}] ${message}\n`;
+function parseAssets(text) {
+  return [
+    ...new Set(
+      text
+        .split("\n")
+        .map((x) => x.trim())
+        .filter((x) => x && !x.startsWith("#"))
+    )
+  ];
+}
+
+function formatSkipped(skipped) {
+  return skipped
+    .map((item) => {
+      if (typeof item === "string") {
+        return item;
+      }
+
+      return `${item.asset} - ${item.reason || "Skipped"}`;
+    })
+    .join("\n");
+}
+
+function setAutosaveStatus(text) {
+  autosaveStatus.textContent = text;
+}
+
+function scheduleAutosave() {
+  if (isLoadingInitialState) return;
+
+  setAutosaveStatus("Saving...");
+
+  clearTimeout(autosaveTimer);
+
+  autosaveTimer = setTimeout(async () => {
+    const assets = parseAssets(assetsBox.value);
+
+    await chrome.storage.local.set({
+      assets,
+      mode: modeSelect.value
+    });
+
+    lastState.assets = assets;
+    lastState.mode = modeSelect.value;
+
+    totalCount.textContent = assets.length;
+    setAutosaveStatus("Autosaved");
+  }, 500);
+}
+
+function setActiveCard(view) {
+  currentLogView = view;
+
+  totalCard.classList.toggle("active", view === "total");
+  doneCard.classList.toggle("active", view === "done");
+  skippedCard.classList.toggle("active", view === "skipped");
+
+  renderLogBox();
+}
+
+function renderLogBox() {
+  if (currentLogView === "total") {
+    logBox.textContent =
+      lastState.runtimeLog || "Runtime log will appear here.";
+  }
+
+  if (currentLogView === "done") {
+    logBox.textContent =
+      lastState.completed.length > 0
+        ? lastState.completed.join("\n")
+        : "No completed assets yet.";
+  }
+
+  if (currentLogView === "skipped") {
+    logBox.textContent =
+      lastState.skipped.length > 0
+        ? formatSkipped(lastState.skipped)
+        : "No skipped assets yet.";
+  }
+
   logBox.scrollTop = logBox.scrollHeight;
 }
 
 async function getActiveTab() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  return tab;
+  const tabs = await chrome.tabs.query({
+    active: true,
+    currentWindow: true
+  });
+
+  return tabs[0];
 }
 
-async function refreshState() {
+async function refreshState({ renderLogs = true, updateAssetBox = false } = {}) {
   const data = await chrome.storage.local.get({
     assets: [],
     completed: [],
     skipped: [],
     running: false,
-    mode: "EOL"
+    mode: "EOL",
+    runtimeLog: ""
   });
 
-  assetsBox.value = data.assets.join("\n");
+  lastState = data;
+
   modeSelect.value = data.mode || "EOL";
   totalCount.textContent = data.assets.length;
   completedCount.textContent = data.completed.length;
   skippedCount.textContent = data.skipped.length;
-}
 
-async function checkPage() {
-  const tab = await getActiveTab();
-
-  if (!tab?.url?.startsWith(TARGET_URL_PREFIX)) {
-    pageStatus.textContent = "Unsupported page";
-    startBtn.disabled = true;
-    return;
+  if (updateAssetBox) {
+    assetsBox.value = data.assets.join("\n");
   }
 
-  pageStatus.textContent = "Ready on MES triage page";
-  startBtn.disabled = false;
+  if (renderLogs) {
+    renderLogBox();
+  }
 }
 
-saveBtn.addEventListener("click", async () => {
-  const assets = parseAssets(assetsBox.value);
+totalCard.addEventListener("click", () => setActiveCard("total"));
+doneCard.addEventListener("click", () => setActiveCard("done"));
+skippedCard.addEventListener("click", () => setActiveCard("skipped"));
 
-  await chrome.storage.local.set({
-    assets,
-    mode: modeSelect.value,
-    completed: [],
-    skipped: [],
-    running: false
-  });
-
-  await refreshState();
-  log(`Saved ${assets.length} assets`);
-});
+assetsBox.addEventListener("input", scheduleAutosave);
+modeSelect.addEventListener("change", scheduleAutosave);
 
 clearBtn.addEventListener("click", async () => {
   assetsBox.value = "";
@@ -84,19 +177,36 @@ clearBtn.addEventListener("click", async () => {
     assets: [],
     completed: [],
     skipped: [],
-    running: false
+    running: false,
+    runtimeLog: ""
   });
 
-  await refreshState();
-  log("Cleared assets");
+  await refreshState({ updateAssetBox: false });
+  setAutosaveStatus("Autosaved");
 });
 
 startBtn.addEventListener("click", async () => {
   const tab = await getActiveTab();
+
+  if (!tab?.url || !isTargetPage(tab.url)) {
+    pageStatus.textContent = "Unsupported page";
+
+    await chrome.storage.local.set({
+      runtimeLog: `[${new Date().toLocaleTimeString()}] Navigate to MES triage page first\n`
+    });
+
+    await refreshState();
+    return;
+  }
+
   const assets = parseAssets(assetsBox.value);
 
   if (!assets.length) {
-    log("No assets provided");
+    await chrome.storage.local.set({
+      runtimeLog: `[${new Date().toLocaleTimeString()}] No assets provided\n`
+    });
+
+    await refreshState();
     return;
   }
 
@@ -105,8 +215,16 @@ startBtn.addEventListener("click", async () => {
     completed: [],
     skipped: [],
     running: true,
-    mode: modeSelect.value
+    mode: modeSelect.value,
+    runtimeLog: ""
   });
+
+  lastState.assets = assets;
+  lastState.completed = [];
+  lastState.skipped = [];
+  lastState.running = true;
+  lastState.mode = modeSelect.value;
+  lastState.runtimeLog = "";
 
   chrome.tabs.sendMessage(tab.id, {
     type: "MES_START",
@@ -114,8 +232,8 @@ startBtn.addEventListener("click", async () => {
     mode: modeSelect.value
   });
 
-  await refreshState();
-  log("Start sent to MES page");
+  await refreshState({ renderLogs: true });
+  pageStatus.textContent = "Running";
 });
 
 stopBtn.addEventListener("click", async () => {
@@ -127,15 +245,18 @@ stopBtn.addEventListener("click", async () => {
     type: "MES_STOP"
   });
 
-  log("Stop sent");
+  pageStatus.textContent = "Stopping";
 });
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "MES_PROGRESS") {
-    refreshState();
-    log(message.message);
+    refreshState({ renderLogs: true });
   }
 });
 
-refreshState();
-checkPage();
+(async function init() {
+  isLoadingInitialState = true;
+  await refreshState({ updateAssetBox: true });
+  isLoadingInitialState = false;
+  setAutosaveStatus("Autosaved");
+})();
