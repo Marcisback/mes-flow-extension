@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "MES Flow Assistant",
+  "version": "0.1.0",
+  "description": "Chrome extension prototype for MES EOL/MRI workflow automation.",
+  "permissions": ["storage", "tabs", "activeTab"],
+  "host_permissions": [
+    "https://www.internalfb.com/inventory/manufacturing/reverse/triage*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "MES Flow Assistant"
+  },
+  "background": {
+    "service_worker": "background/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.internalfb.com/inventory/manufacturing/reverse/triage*"
+      ],
+      "js": [
+        "shared/logger.js",
+        "shared/storage.js",
+        "shared/queue.js",
+        "content/popup-handler.js",
+        "content/eol.js",
+        "content/mri.js",
+        "content/mes-runner.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

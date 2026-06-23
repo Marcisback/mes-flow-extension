@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>MES Flow Assistant</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>MES Flow Assistant</h1>
+    <p id="pageStatus">Checking page...</p>
+  </header>
+
+  <label for="modeSelect">Mode</label>
+  <select id="modeSelect">
+    <option value="EOL">EOL</option>
+    <option value="MRI" disabled>MRI - coming soon</option>
+  </select>
+
+  <label for="assetsBox">Assets</label>
+  <textarea id="assetsBox" placeholder="IT1234567&#10;IT2345678"></textarea>
+
+  <div class="row">
+    <button id="saveBtn">Save</button>
+    <button id="clearBtn">Clear</button>
+  </div>
+
+  <div class="row">
+    <button id="startBtn" class="primary">Start</button>
+    <button id="stopBtn" class="danger">Stop</button>
+  </div>
+
+  <section class="stats">
+    <div>
+      <strong id="totalCount">0</strong>
+      <span>Total</span>
+    </div>
+    <div>
+      <strong id="completedCount">0</strong>
+      <span>Done</span>
+    </div>
+    <div>
+      <strong id="skippedCount">0</strong>
+      <span>Skipped</span>
+    </div>
+  </section>
+
+  <pre id="logBox"></pre>
+
+  <script src="popup.js"></script>
+</body>
+</html>
