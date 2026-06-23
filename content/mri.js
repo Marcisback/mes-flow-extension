@@ -18,10 +18,6 @@ window.MESMRI = {
 
     await window.MESPopupHandler.closePopupIfPresent();
 
-    if (this.isAlreadyProcessedMRI(asset)) {
-      throw new window.MESAssetError("Already Processed");
-    }
-
     const startButton = await eol.waitForClickableByText(
       eol.selectors.startButtonText,
       eol.DEFAULT_TIMEOUT_MS,
@@ -72,18 +68,5 @@ window.MESMRI = {
     eol.throwIfStopped(shouldStop);
 
     log(`Done: ${asset}`);
-  },
-
-  isAlreadyProcessedMRI(asset) {
-    if (!asset) return false;
-
-    const pageText = document.body.innerText || "";
-    const assetRegex = new RegExp(`\\b${asset}\\b`, "i");
-
-    return (
-      assetRegex.test(pageText) &&
-      /\bStorage\b/i.test(pageText) &&
-      /Move instruction/i.test(pageText)
-    );
   }
 };

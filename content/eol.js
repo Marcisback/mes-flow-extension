@@ -30,14 +30,9 @@ window.MESEOL = {
     );
 
     await this.typeAndSubmit(scan1, asset, shouldStop);
-
     await this.sleep(1200, shouldStop);
 
     await window.MESPopupHandler.closePopupIfPresent();
-
-    if (this.isAlreadyProcessedPage(asset)) {
-      throw new window.MESAssetError("Already Processed");
-    }
 
     this.throwIfStopped(shouldStop);
 
@@ -74,7 +69,6 @@ window.MESEOL = {
     );
 
     await this.safeClick(confirmButton, shouldStop);
-
     await this.sleep(1200, shouldStop);
 
     await window.MESPopupHandler.closePopupIfPresent();
@@ -82,21 +76,6 @@ window.MESEOL = {
     this.throwIfStopped(shouldStop);
 
     log(`Done: ${asset}`);
-  },
-
-  isAlreadyProcessedPage(asset) {
-    if (!asset) return false;
-
-    const pageText = document.body.innerText || "";
-
-    const assetRegex = new RegExp(`\\b${asset}\\b`, "i");
-
-    return (
-      assetRegex.test(pageText) &&
-      /\bEOL\b/i.test(pageText) &&
-      /Move instruction/i.test(pageText) &&
-      /\bWipe\b/i.test(pageText)
-    );
   },
 
   async typeAndSubmit(input, value, shouldStop) {
