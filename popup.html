@@ -5,51 +5,88 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header>
-    <h1>MES Flow Assistant</h1>
-    <p id="pageStatus">Ready</p>
-  </header>
+  <main class="popup-shell">
+    <header class="app-header">
+      <div>
+        <h1>Computer<span>:)</span>Care</h1>
+        <p>MES Flow</p>
+      </div>
 
-  <label for="modeSelect">Mode</label>
-  <select id="modeSelect">
-    <option value="EOL">EOL</option>
-    <option value="MRI">MRI</option>
-  </select>
+      <div class="header-actions">
+        <button class="icon-button" id="themeToggle" type="button" title="Theme: Auto" aria-label="Theme: Auto">
+          <span id="themeIcon" class="theme-glyph">Auto</span>
+        </button>
+      </div>
+    </header>
 
-  <div class="label-row">
-    <label for="assetsBox">Assets</label>
-    <span id="autosaveStatus">Autosaved</span>
-  </div>
+    <section class="status-card" aria-label="Connection status">
+      <div class="status-pill">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span>Status:</span>
+        <strong id="pageStatus">Ready</strong>
+      </div>
 
-  <textarea id="assetsBox" placeholder="IT1234567&#10;IT2345678"></textarea>
+      <div class="connection-pill">
+        <span id="connectionStatus">Disconnected</span>
+        <span class="wifi-mark" aria-hidden="true"></span>
+      </div>
+    </section>
 
-  <div class="row">
-    <button id="clearBtn">Clear</button>
-  </div>
+    <section class="field-group">
+      <label for="modeSelect">Mode</label>
+      <select id="modeSelect">
+        <option value="EOL">EOL</option>
+        <option value="MRI">MRI</option>
+      </select>
+    </section>
 
-  <div class="row">
-    <button id="startBtn" class="primary">Start</button>
-    <button id="stopBtn" class="danger">Stop</button>
-  </div>
+    <section class="field-group">
+      <div class="label-row">
+        <label for="assetsBox">Asset List</label>
+        <span id="autosaveStatus">Autosaved</span>
+      </div>
+      <textarea id="assetsBox" placeholder="IT1234567&#10;IT2345678"></textarea>
+    </section>
 
-  <section class="stats">
-    <button class="stat-card active" id="totalCard">
-      <strong id="totalCount">0</strong>
-      <span>Total</span>
+    <button id="clearBtn" class="secondary-action" type="button">
+      <span class="button-icon clear-icon" aria-hidden="true"></span>
+      <span>Clear List</span>
     </button>
 
-    <button class="stat-card" id="doneCard">
-      <strong id="completedCount">0</strong>
-      <span>Done</span>
+    <button id="actionBtn" class="run-action start" type="button">
+      <span class="button-icon action-icon" aria-hidden="true"></span>
+      <span id="actionLabel">Start</span>
     </button>
 
-    <button class="stat-card" id="skippedCard">
-      <strong id="skippedCount">0</strong>
-      <span>Skipped</span>
-    </button>
-  </section>
+    <section class="stats" aria-label="Queue statistics">
+      <button class="stat-card" id="doneCard" type="button">
+        <strong id="completedCount">0</strong>
+        <span>Done</span>
+      </button>
 
-  <pre id="logBox"></pre>
+      <button class="stat-card" id="skippedCard" type="button">
+        <strong id="skippedCount">0</strong>
+        <span>Skipped</span>
+      </button>
+
+      <button class="stat-card active" id="totalCard" type="button">
+        <strong id="totalCount">0</strong>
+        <span>Total</span>
+      </button>
+    </section>
+
+    <section class="logs-section">
+      <div class="label-row">
+        <label for="logBox">Runtime Logs</label>
+        <span class="live-status">Live <i aria-hidden="true"></i></span>
+      </div>
+      <pre id="logBox"></pre>
+    </section>
+
+    <footer class="app-footer">
+      <strong>Computer<span>:)</span>Care</strong>
+    </footer>
+  </main>
 
   <script src="popup.js"></script>
 </body>

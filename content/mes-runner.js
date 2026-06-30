@@ -6,8 +6,11 @@ let isRunning = false;
 const BETWEEN_ASSET_DELAY_MS = 1500;
 const AFTER_SKIP_DELAY_MS = 2500;
 const STOP_CHECK_INTERVAL_MS = 100;
+const THEME_STORAGE_KEY = "theme";
 
 let overlay = null;
+let selectedTheme = "auto";
+const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
 
 function isTargetPage() {
   return (
@@ -33,6 +36,18 @@ chrome.runtime.onMessage.addListener((message) => {
     stopRequested = true;
     window.MESStorage.setRunning(false);
     updateOverlayStatus("Stopping...");
+  }
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local" || !changes[THEME_STORAGE_KEY]) return;
+
+  applyOverlayTheme(changes[THEME_STORAGE_KEY].newValue || "auto");
+});
+
+systemTheme.addEventListener("change", () => {
+  if (selectedTheme === "auto") {
+    applyOverlayTheme("auto");
   }
 });
 
@@ -150,6 +165,10 @@ async function runQueue(assets, mode) {
   });
 
   log("Queue stopped");
+
+  chrome.runtime.sendMessage({
+    type: "MES_BADGE_DONE"
+  }).catch(() => {});
 }
 
 function createOverlay() {
@@ -157,11 +176,12 @@ function createOverlay() {
 
   overlay = document.createElement("div");
   overlay.id = "mes-flow-overlay";
+  overlay.dataset.theme = resolveOverlayTheme(selectedTheme);
 
   overlay.innerHTML = `
     <div class="mfa-title-row">
-      <strong>MES Flow Assistant</strong>
-      <button id="mfa-close-btn">×</button>
+      <strong>MES Flow</strong>
+      <button id="mfa-close-btn">x</button>
     </div>
 
     <div class="mfa-row">
@@ -176,7 +196,7 @@ function createOverlay() {
 
     <div class="mfa-current">
       <span>Current Asset</span>
-      <strong id="mfa-current-asset">—</strong>
+      <strong id="mfa-current-asset">-</strong>
     </div>
 
     <div class="mfa-progress-bar">
@@ -205,19 +225,42 @@ function createOverlay() {
   style.id = "mes-flow-overlay-style";
   style.textContent = `
     #mes-flow-overlay {
+      --mfa-overlay: #ffffff;
+      --mfa-card: #ffffff;
+      --mfa-track: #e5e7eb;
+      --mfa-text: #111827;
+      --mfa-muted: #475569;
+      --mfa-border: #e2e8f0;
+      --mfa-red: #ff1f2d;
+      --mfa-red-hover: #e91825;
+      --mfa-green: #20c63a;
+      --mfa-yellow: #f4b400;
+      --mfa-on-red: #ffffff;
+      --mfa-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
       position: fixed;
       right: 18px;
       bottom: 18px;
-      width: 285px;
+      width: 312px;
       z-index: 999999;
-      background: rgba(15, 17, 21, 0.96);
-      color: #f1f1f1;
-      border: 1px solid rgba(255,255,255,0.14);
-      border-radius: 12px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
-      padding: 12px;
+      background: var(--mfa-overlay);
+      color: var(--mfa-text);
+      border: 1px solid var(--mfa-border);
+      border-radius: 18px;
+      box-shadow: var(--mfa-shadow);
+      padding: 14px;
       font-family: Arial, sans-serif;
       font-size: 12px;
+      line-height: 1.35;
+    }
+
+    #mes-flow-overlay[data-theme="dark"] {
+      --mfa-overlay: #0b0f14;
+      --mfa-card: #0f141b;
+      --mfa-track: #1f2937;
+      --mfa-text: #f8fafc;
+      --mfa-muted: #cbd5e1;
+      --mfa-border: #26313f;
+      --mfa-shadow: 0 12px 30px rgba(0,0,0,0.34);
     }
 
     #mes-flow-overlay .mfa-title-row {
@@ -228,53 +271,67 @@ function createOverlay() {
     }
 
     #mes-flow-overlay .mfa-title-row strong {
-      font-size: 14px;
+      color: var(--mfa-text);
+      font-size: 16px;
+      font-weight: 800;
     }
 
     #mfa-close-btn {
       background: transparent;
       border: none;
-      color: #a8b3c4;
+      color: var(--mfa-muted);
       font-size: 18px;
+      font-weight: 700;
       cursor: pointer;
       line-height: 1;
+      padding: 0;
     }
 
     #mes-flow-overlay .mfa-row {
       display: flex;
       justify-content: space-between;
-      margin: 5px 0;
-      color: #a8b3c4;
+      margin: 6px 0;
+      color: var(--mfa-muted);
+      font-size: 12px;
     }
 
     #mes-flow-overlay .mfa-row strong {
-      color: #ffffff;
+      color: var(--mfa-text);
+      font-weight: 800;
+    }
+
+    #mfa-status {
+      color: var(--mfa-green) !important;
+      text-transform: uppercase;
     }
 
     #mes-flow-overlay .mfa-current {
-      margin-top: 10px;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 8px;
-      padding: 8px;
+      margin-top: 12px;
+      background: var(--mfa-card);
+      border: 1px solid var(--mfa-border);
+      border-radius: 9px;
+      padding: 10px 12px;
     }
 
     #mes-flow-overlay .mfa-current span {
       display: block;
-      color: #a8b3c4;
-      font-size: 11px;
-      margin-bottom: 3px;
+      color: var(--mfa-muted);
+      font-size: 10px;
+      margin-bottom: 6px;
     }
 
     #mes-flow-overlay .mfa-current strong {
-      font-size: 15px;
+      display: block;
+      color: var(--mfa-text);
+      font-size: 16px;
+      font-weight: 900;
       word-break: break-word;
     }
 
     #mes-flow-overlay .mfa-progress-bar {
       margin-top: 10px;
       height: 8px;
-      background: rgba(255,255,255,0.10);
+      background: var(--mfa-track);
       border-radius: 999px;
       overflow: hidden;
     }
@@ -282,55 +339,75 @@ function createOverlay() {
     #mfa-progress-fill {
       height: 100%;
       width: 0%;
-      background: #2ea043;
+      background: var(--mfa-green);
       border-radius: 999px;
       transition: width 0.25s ease;
     }
 
     #mes-flow-overlay .mfa-stats {
-      display: flex;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
       gap: 8px;
-      margin-top: 10px;
+      margin-top: 12px;
     }
 
     #mes-flow-overlay .mfa-stats div {
-      flex: 1;
       text-align: center;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.08);
+      background: var(--mfa-card);
+      border: 1px solid var(--mfa-border);
       border-radius: 8px;
-      padding: 6px;
+      padding: 8px 6px;
     }
 
     #mes-flow-overlay .mfa-stats strong {
       display: block;
-      font-size: 15px;
+      color: var(--mfa-text);
+      font-size: 21px;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    #mfa-done {
+      color: var(--mfa-green) !important;
+    }
+
+    #mfa-skipped {
+      color: var(--mfa-yellow) !important;
     }
 
     #mes-flow-overlay .mfa-stats span {
-      color: #a8b3c4;
+      display: block;
+      margin-top: 6px;
+      color: var(--mfa-muted);
       font-size: 10px;
+      font-weight: 800;
     }
 
     #mfa-stop-btn {
       width: 100%;
-      margin-top: 10px;
-      padding: 8px;
+      min-height: 38px;
+      margin-top: 12px;
+      padding: 9px;
       border-radius: 8px;
-      border: 1px solid #f85149;
-      background: rgba(248, 81, 73, 0.22);
-      color: white;
-      font-weight: 700;
+      border: 1px solid var(--mfa-red);
+      background: var(--mfa-red);
+      color: var(--mfa-on-red);
+      font-weight: 800;
       cursor: pointer;
     }
 
     #mfa-stop-btn:hover {
-      background: rgba(248, 81, 73, 0.34);
+      background: var(--mfa-red-hover);
+    }
+
+    #mfa-stop-btn[hidden] {
+      display: none;
     }
   `;
 
   document.documentElement.appendChild(style);
   document.body.appendChild(overlay);
+  syncOverlayTheme();
 
   document.getElementById("mfa-stop-btn").addEventListener("click", async () => {
     stopRequested = true;
@@ -341,6 +418,30 @@ function createOverlay() {
   document.getElementById("mfa-close-btn").addEventListener("click", () => {
     overlay.style.display = "none";
   });
+}
+
+function resolveOverlayTheme(theme) {
+  if (theme === "dark" || theme === "light") {
+    return theme;
+  }
+
+  return systemTheme.matches ? "dark" : "light";
+}
+
+function applyOverlayTheme(theme) {
+  selectedTheme = theme === "dark" || theme === "light" ? theme : "auto";
+
+  if (overlay) {
+    overlay.dataset.theme = resolveOverlayTheme(selectedTheme);
+  }
+}
+
+async function syncOverlayTheme() {
+  const data = await chrome.storage.local.get({
+    [THEME_STORAGE_KEY]: "auto"
+  });
+
+  applyOverlayTheme(data[THEME_STORAGE_KEY]);
 }
 
 function updateOverlay({
@@ -363,6 +464,7 @@ function updateOverlay({
   document.getElementById("mfa-done").textContent = done;
   document.getElementById("mfa-skipped").textContent = skipped;
   document.getElementById("mfa-progress-fill").style.width = `${percent}%`;
+  setOverlayStopVisibility(status);
 
   overlay.style.display = "block";
 }
@@ -372,6 +474,15 @@ function updateOverlayStatus(status) {
 
   const statusEl = document.getElementById("mfa-status");
   if (statusEl) statusEl.textContent = status;
+
+  setOverlayStopVisibility(status);
+}
+
+function setOverlayStopVisibility(status) {
+  const stopBtn = document.getElementById("mfa-stop-btn");
+  if (!stopBtn) return;
+
+  stopBtn.hidden = status !== "Running";
 }
 
 async function sleep(ms) {
