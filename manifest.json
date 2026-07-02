@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MES Flow Assistant",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Chrome extension prototype for MES EOL/MRI workflow automation.",
   "permissions": ["storage", "tabs", "activeTab"],
   "host_permissions": [
@@ -28,6 +28,7 @@
         "content/popup-handler.js",
         "content/eol.js",
         "content/mri.js",
+        "content/repair-cleanup.js",
         "content/mes-runner.js"
       ],
       "run_at": "document_idle"

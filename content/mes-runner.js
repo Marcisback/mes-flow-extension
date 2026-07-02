@@ -7,6 +7,11 @@ const BETWEEN_ASSET_DELAY_MS = 1500;
 const AFTER_SKIP_DELAY_MS = 2500;
 const STOP_CHECK_INTERVAL_MS = 100;
 const THEME_STORAGE_KEY = "theme";
+const MODE_LABELS = {
+  EOL: "EOL",
+  MRI: "MRI",
+  REPAIR_CLEANUP: "Repair Cleanup (EOL HANDOVER)"
+};
 
 let overlay = null;
 let selectedTheme = "auto";
@@ -72,7 +77,7 @@ async function runQueue(assets, mode) {
   createOverlay();
   updateOverlay({
     status: "Running",
-    mode,
+    mode: getModeLabel(mode),
     currentAsset: "Starting...",
     total: assets.length,
     done: 0,
@@ -88,7 +93,7 @@ async function runQueue(assets, mode) {
 
     updateOverlay({
       status: "Running",
-      mode,
+      mode: getModeLabel(mode),
       currentAsset: asset,
       total: assets.length,
       done: stateBefore.completed.length,
@@ -102,6 +107,8 @@ async function runQueue(assets, mode) {
         await window.MESEOL.processAsset(asset, () => stopRequested);
       } else if (mode === "MRI") {
         await window.MESMRI.processAsset(asset, () => stopRequested);
+      } else if (mode === "REPAIR_CLEANUP") {
+        await window.MESRepairCleanup.processAsset(asset, () => stopRequested);
       } else {
         throw new Error(`Unsupported mode: ${mode}`);
       }
@@ -114,7 +121,7 @@ async function runQueue(assets, mode) {
 
       updateOverlay({
         status: "Running",
-        mode,
+        mode: getModeLabel(mode),
         currentAsset: asset,
         total: assets.length,
         done: stateAfterDone.completed.length,
@@ -137,7 +144,7 @@ async function runQueue(assets, mode) {
 
       updateOverlay({
         status: "Running",
-        mode,
+        mode: getModeLabel(mode),
         currentAsset: asset,
         total: assets.length,
         done: stateAfterSkip.completed.length,
@@ -157,7 +164,7 @@ async function runQueue(assets, mode) {
 
   updateOverlay({
     status: stopRequested ? "Stopped" : "Finished",
-    mode,
+    mode: getModeLabel(mode),
     currentAsset: stopRequested ? "Stopped by user" : "Complete",
     total: assets.length,
     done: finalState.completed.length,
@@ -169,6 +176,10 @@ async function runQueue(assets, mode) {
   chrome.runtime.sendMessage({
     type: "MES_BADGE_DONE"
   }).catch(() => {});
+}
+
+function getModeLabel(mode) {
+  return MODE_LABELS[mode] || mode;
 }
 
 function createOverlay() {
