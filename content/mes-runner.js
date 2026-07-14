@@ -10,6 +10,7 @@ const THEME_STORAGE_KEY = "theme";
 const MODE_LABELS = {
   EOL: "EOL",
   MRI: "MRI",
+  MRI_FAIL: "MRI (FAIL MOBILE-DISPLAY)",
   REPAIR_CLEANUP: "Repair Cleanup (EOL HANDOVER)"
 };
 
@@ -107,6 +108,10 @@ async function runQueue(assets, mode) {
         await window.MESEOL.processAsset(asset, () => stopRequested);
       } else if (mode === "MRI") {
         await window.MESMRI.processAsset(asset, () => stopRequested);
+      } else if (mode === "MRI_FAIL") {
+        await window.MESMRI.processAsset(asset, () => stopRequested, {
+          diagnosticOutcome: "failure"
+        });
       } else if (mode === "REPAIR_CLEANUP") {
         await window.MESRepairCleanup.processAsset(asset, () => stopRequested);
       } else {
