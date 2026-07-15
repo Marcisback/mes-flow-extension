@@ -297,6 +297,59 @@ textarea {
   line-height: 1.45;
 }
 
+#repairSettings[hidden] {
+  display: none;
+}
+
+#repairLocator {
+  width: 100%;
+  height: 32px;
+  padding: 0 11px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  outline: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#repairLocator:focus {
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-focus) 32%, transparent);
+}
+
+.radio-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.radio-option {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--color-text);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.radio-option input {
+  width: auto;
+  margin: 0;
+  accent-color: var(--color-brand);
+  cursor: pointer;
+}
+
 .secondary-action,
 .run-action {
   width: 100%;

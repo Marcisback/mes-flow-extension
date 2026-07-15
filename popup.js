@@ -1,5 +1,7 @@
 const TARGET_PATH = "/inventory/manufacturing/reverse/triage";
 const THEME_STORAGE_KEY = "theme";
+const REPAIR_DEFAULT_LOCATOR = "NEW102-SMOBILE1-EOL-11-D01";
+const REPAIR_DEFAULT_OUTCOME = "confirmed";
 const THEME_OPTIONS = ["auto", "light", "dark"];
 const BADGE_LOADING_COLOR = "#6B7280";
 const BADGE_RUNNING_COLOR = "#22C55E";
@@ -7,6 +9,11 @@ const BADGE_STOPPING_COLOR = "#FBBF24";
 
 const assetsBox = document.getElementById("assetsBox");
 const modeSelect = document.getElementById("modeSelect");
+const repairSettings = document.getElementById("repairSettings");
+const repairLocator = document.getElementById("repairLocator");
+const repairOutcomeInputs = [
+  ...document.querySelectorAll('input[name="repairOutcome"]')
+];
 const clearBtn = document.getElementById("clearBtn");
 const actionBtn = document.getElementById("actionBtn");
 const actionLabel = document.getElementById("actionLabel");
@@ -38,7 +45,9 @@ let lastState = {
   running: false,
   mode: "EOL",
   runtimeLog: "",
-  theme: "auto"
+  theme: "auto",
+  repairOutcome: REPAIR_DEFAULT_OUTCOME,
+  repairLocator: REPAIR_DEFAULT_LOCATOR
 };
 
 function setActionBadge(text, color) {
@@ -136,6 +145,28 @@ function setAutosaveStatus(text) {
   autosaveStatus.textContent = text;
 }
 
+function getSelectedRepairOutcome() {
+  const checked = repairOutcomeInputs.find((input) => input.checked);
+
+  return checked ? checked.value : REPAIR_DEFAULT_OUTCOME;
+}
+
+function setRepairOutcome(outcome) {
+  const value = outcome === "failed" ? "failed" : "confirmed";
+
+  repairOutcomeInputs.forEach((input) => {
+    input.checked = input.value === value;
+  });
+}
+
+function getRepairLocator() {
+  return repairLocator.value.trim() || REPAIR_DEFAULT_LOCATOR;
+}
+
+function updateRepairSettingsVisibility() {
+  repairSettings.hidden = modeSelect.value !== "REPAIR";
+}
+
 function renderRunState() {
   const running = Boolean(lastState.running);
 
@@ -161,14 +192,20 @@ function scheduleAutosave() {
 
   autosaveTimer = setTimeout(async () => {
     const assets = parseAssets(assetsBox.value);
+    const repairOutcome = getSelectedRepairOutcome();
+    const repairLocatorValue = getRepairLocator();
 
     await chrome.storage.local.set({
       assets,
-      mode: modeSelect.value
+      mode: modeSelect.value,
+      repairOutcome,
+      repairLocator: repairLocatorValue
     });
 
     lastState.assets = assets;
     lastState.mode = modeSelect.value;
+    lastState.repairOutcome = repairOutcome;
+    lastState.repairLocator = repairLocatorValue;
 
     totalCount.textContent = assets.length;
     setAutosaveStatus("Autosaved");
@@ -225,7 +262,9 @@ async function refreshState({ renderLogs = true, updateAssetBox = false } = {}) 
     running: false,
     mode: "EOL",
     runtimeLog: "",
-    [THEME_STORAGE_KEY]: "auto"
+    [THEME_STORAGE_KEY]: "auto",
+    repairOutcome: REPAIR_DEFAULT_OUTCOME,
+    repairLocator: REPAIR_DEFAULT_LOCATOR
   });
 
   lastState = data;
@@ -234,6 +273,9 @@ async function refreshState({ renderLogs = true, updateAssetBox = false } = {}) 
   totalCount.textContent = data.assets.length;
   completedCount.textContent = data.completed.length;
   skippedCount.textContent = data.skipped.length;
+  setRepairOutcome(data.repairOutcome);
+  repairLocator.value = data.repairLocator || REPAIR_DEFAULT_LOCATOR;
+  updateRepairSettingsVisibility();
   renderRunState();
   renderTheme(data[THEME_STORAGE_KEY]);
 
@@ -272,13 +314,18 @@ async function startProcessing() {
     return;
   }
 
+  const repairOutcome = getSelectedRepairOutcome();
+  const repairLocatorValue = getRepairLocator();
+
   await chrome.storage.local.set({
     assets,
     completed: [],
     skipped: [],
     running: true,
     mode: modeSelect.value,
-    runtimeLog: ""
+    runtimeLog: "",
+    repairOutcome,
+    repairLocator: repairLocatorValue
   });
 
   showRunningBadge();
@@ -289,11 +336,15 @@ async function startProcessing() {
   lastState.running = true;
   lastState.mode = modeSelect.value;
   lastState.runtimeLog = "";
+  lastState.repairOutcome = repairOutcome;
+  lastState.repairLocator = repairLocatorValue;
 
   chrome.tabs.sendMessage(tab.id, {
     type: "MES_START",
     assets,
-    mode: modeSelect.value
+    mode: modeSelect.value,
+    repairOutcome,
+    repairLocator: repairLocatorValue
   });
 
   await refreshState({ renderLogs: true });
@@ -322,7 +373,14 @@ doneCard.addEventListener("click", () => setActiveCard("done"));
 skippedCard.addEventListener("click", () => setActiveCard("skipped"));
 
 assetsBox.addEventListener("input", scheduleAutosave);
-modeSelect.addEventListener("change", scheduleAutosave);
+modeSelect.addEventListener("change", () => {
+  updateRepairSettingsVisibility();
+  scheduleAutosave();
+});
+repairLocator.addEventListener("input", scheduleAutosave);
+repairOutcomeInputs.forEach((input) => {
+  input.addEventListener("change", scheduleAutosave);
+});
 
 themeToggle.addEventListener("click", async () => {
   const currentIndex = THEME_OPTIONS.indexOf(selectedTheme);

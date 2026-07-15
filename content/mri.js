@@ -78,8 +78,7 @@ window.MESMRI = {
   },
 
   // MRI (FAIL) diagnostic branch: reject the diagnostic with a fixed failure
-  // reason instead of confirming it. The failure dialog closing is the success
-  // signal for the currently implemented stage; no post-diagnostic step is run.
+  // reason instead of confirming it, then move the asset to a repair location.
   async completeFailedDiagnostic(asset, shouldStop) {
     const eol = window.MESEOL;
     const log = window.MESLogger.log;
@@ -100,6 +99,23 @@ window.MESMRI = {
 
     await this.fastClick(failedButton, shouldStop);
 
+    await this.completeFailureReasonDialog(shouldStop);
+
+    await this.completeMoveToRepair(shouldStop);
+
+    log(`Done: ${asset}`);
+  },
+
+  // Shared failure-reason dialog handler: opens the reason combobox, selects the
+  // fixed failure reason, confirms it, and waits for the dialog to close. This
+  // is the production reference implementation extracted from the MRI (FAIL)
+  // diagnostic branch so the Repair (Failed) workflow can reuse it verbatim.
+  // logPrefix only affects log wording; it defaults so MRI (FAIL) output is
+  // unchanged.
+  async completeFailureReasonDialog(shouldStop, logPrefix = "MRI (FAIL)") {
+    const eol = window.MESEOL;
+    const log = window.MESLogger.log;
+
     const dialog = await this.waitForFailureElement(
       () => this.findFailureReasonDialog(),
       MRI_FAIL_DIALOG_TIMEOUT_MS,
@@ -110,7 +126,7 @@ window.MESMRI = {
       throw new Error("Failure reason dialog did not appear");
     }
 
-    log("MRI (FAIL): Diagnostic failure dialog opened");
+    log(`${logPrefix}: Diagnostic failure dialog opened`);
 
     const combobox = await this.waitForFailureElement(
       () =>
@@ -200,7 +216,7 @@ window.MESMRI = {
       throw new Error(`${MRI_FAIL_REASON_LABEL} option did not become selected`);
     }
 
-    log(`MRI (FAIL): Selected ${MRI_FAIL_REASON_LABEL}`);
+    log(`${logPrefix}: Selected ${MRI_FAIL_REASON_LABEL}`);
 
     const confirmButton = await this.waitForFailureElement(
       () => dialog.querySelector('button[aria-label="Confirm failure"]'),
@@ -234,17 +250,14 @@ window.MESMRI = {
       throw new Error("Failure reason dialog did not close");
     }
 
-    log("MRI (FAIL): Diagnostic failure confirmed");
-
-    await this.completeMoveToRepair(shouldStop);
-
-    log(`Done: ${asset}`);
+    log(`${logPrefix}: Diagnostic failure confirmed`);
   },
 
-  // MRI (FAIL) Move to Repair step. Meta's ARIA autocomplete responds reliably
-  // to keyboard input, so this mirrors the keyboard-first approach used for the
-  // failure combobox instead of clicking the suggestion.
-  async completeMoveToRepair(shouldStop) {
+  // MRI (FAIL) Move to Repair step: type the repair location, then select the
+  // matching autocomplete suggestion and confirm the move. repairLocation
+  // defaults to the MRI (FAIL) constant so existing behavior is unchanged; the
+  // Repair mode passes its configured locator.
+  async completeMoveToRepair(shouldStop, repairLocation = MRI_FAIL_REPAIR_LOCATION) {
     const eol = window.MESEOL;
     const log = window.MESLogger.log;
 
@@ -271,15 +284,11 @@ window.MESMRI = {
     nativeSetter.call(locationInput, "");
     locationInput.dispatchEvent(new Event("input", { bubbles: true }));
 
-    nativeSetter.call(locationInput, MRI_FAIL_REPAIR_LOCATION);
+    nativeSetter.call(locationInput, repairLocation);
     locationInput.dispatchEvent(new Event("input", { bubbles: true }));
 
-    // DEBUG (experiment): select the suggestion by clicking it instead of
-    // dispatching ArrowDown / Enter.
-    log("MRI (FAIL): Waiting for repair location suggestion");
-
     const suggestion = await this.waitForFailureElement(
-      () => this.findRepairLocationSuggestion(locationInput),
+      () => this.findRepairLocationSuggestion(locationInput, repairLocation),
       eol.DEFAULT_TIMEOUT_MS,
       shouldStop
     );
@@ -288,12 +297,9 @@ window.MESMRI = {
       throw new Error("Move to Repair location suggestion did not appear");
     }
 
-    log("MRI (FAIL): Repair location suggestion found");
-    log("MRI (FAIL): Clicking repair location suggestion");
-
     await this.fastClick(suggestion, shouldStop);
 
-    log("MRI (FAIL): Repair location suggestion clicked");
+    log("MRI (FAIL): Selected repair location");
 
     const confirmMove = await this.waitForFailureElement(
       () => document.querySelector('button[aria-label="Confirm move"]'),
@@ -367,9 +373,11 @@ window.MESMRI = {
     );
   },
 
-  findRepairLocationSuggestion(locationInput) {
+  findRepairLocationSuggestion(
+    locationInput,
+    repairLocation = MRI_FAIL_REPAIR_LOCATION
+  ) {
     const eol = window.MESEOL;
-    const log = window.MESLogger.log;
 
     // Resolve the popup owned by the locator input (its id is dynamic and read
     // at runtime); fall back to the first document listbox only if the input
@@ -383,29 +391,17 @@ window.MESMRI = {
       (listboxId && document.getElementById(listboxId)) ||
       document.querySelector('[role="listbox"]');
 
-    log("MRI (FAIL): Locator aria-controls = " + listboxId);
-    log("MRI (FAIL): Resolved repair listbox id = " + (listbox?.id || null));
-
     if (!listbox) {
       return null;
     }
 
-    const options = [...listbox.querySelectorAll('[role="option"]')];
-
-    log("MRI (FAIL): Repair listbox contains " + options.length + " options");
-
-    const match =
-      options.find(
+    return (
+      [...listbox.querySelectorAll('[role="option"]')].find(
         (option) =>
           eol.isVisible(option) &&
-          (option.textContent || "").includes(MRI_FAIL_REPAIR_LOCATION)
-      ) || null;
-
-    if (match) {
-      log("MRI (FAIL): Matching repair suggestion found");
-    }
-
-    return match;
+          (option.textContent || "").includes(repairLocation)
+      ) || null
+    );
   },
 
   findFailureReasonDialog() {

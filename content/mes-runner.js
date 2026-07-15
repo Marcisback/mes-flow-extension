@@ -11,7 +11,8 @@ const MODE_LABELS = {
   EOL: "EOL",
   MRI: "MRI",
   MRI_FAIL: "MRI (FAIL MOBILE-DISPLAY)",
-  REPAIR_CLEANUP: "Repair Cleanup (EOL HANDOVER)"
+  REPAIR_CLEANUP: "Repair Cleanup (EOL HANDOVER)",
+  REPAIR: "Repair"
 };
 
 let overlay = null;
@@ -35,7 +36,10 @@ if (!isTargetPage()) {
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "MES_START") {
     stopRequested = false;
-    runQueue(message.assets, message.mode || "EOL");
+    runQueue(message.assets, message.mode || "EOL", {
+      repairOutcome: message.repairOutcome,
+      repairLocator: message.repairLocator
+    });
   }
 
   if (message.type === "MES_STOP") {
@@ -57,7 +61,7 @@ systemTheme.addEventListener("change", () => {
   }
 });
 
-async function runQueue(assets, mode) {
+async function runQueue(assets, mode, options = {}) {
   const log = window.MESLogger.log;
 
   if (isRunning) {
@@ -114,6 +118,11 @@ async function runQueue(assets, mode) {
         });
       } else if (mode === "REPAIR_CLEANUP") {
         await window.MESRepairCleanup.processAsset(asset, () => stopRequested);
+      } else if (mode === "REPAIR") {
+        await window.MESRepair.processAsset(asset, () => stopRequested, {
+          repairOutcome: options.repairOutcome,
+          repairLocator: options.repairLocator
+        });
       } else {
         throw new Error(`Unsupported mode: ${mode}`);
       }

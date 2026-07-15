@@ -39,7 +39,29 @@
         <option value="MRI">MRI</option>
         <option value="MRI_FAIL">MRI (FAIL MOBILE-DISPLAY)</option>
         <option value="REPAIR_CLEANUP">Repair Cleanup (EOL HANDOVER)</option>
+        <option value="REPAIR">Repair</option>
       </select>
+    </section>
+
+    <section class="field-group" id="repairSettings" hidden>
+      <label>Repair Outcome</label>
+      <div class="radio-row" role="radiogroup" aria-label="Repair Outcome">
+        <label class="radio-option">
+          <input type="radio" name="repairOutcome" value="confirmed" />
+          <span>Confirmed</span>
+        </label>
+        <label class="radio-option">
+          <input type="radio" name="repairOutcome" value="failed" />
+          <span>Failed</span>
+        </label>
+      </div>
+
+      <label for="repairLocator">Repair Locator</label>
+      <input
+        type="text"
+        id="repairLocator"
+        placeholder="NEW102-SMOBILE1-EOL-11-D01"
+      />
     </section>
 
     <section class="field-group">
