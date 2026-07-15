@@ -28,6 +28,7 @@
         "content/shared/popup-handler.js",
         "content/shared/core.js",
         "content/state/shared-state.js",
+        "content/shared/locator-selector.js",
         "content/shared/move-to-repair.js",
         "content/shared/failure-dialog.js",
         "content/state/repair-state.js",

@@ -39,21 +39,37 @@ window.MESRepair = {
     // at Repair Started (State B).
     const stage = await this.waitForEntryStage(shouldStop);
 
+    // Whether the locator has already been selected + verified. Move to Repair
+    // (State A) does this via the shared locator helper, so a direct Repair
+    // Started entry (State B) is the only case that still needs it.
+    let locatorSelected = false;
+
     if (stage === "moveToRepair") {
       // Reuse the shared Move to Repair action, passing the configured locator
       // instead of the MRI (FAIL) default.
       await window.MESMoveToRepair.complete(shouldStop, repairLocator);
       log("Repair: Move to Repair confirmed");
+      locatorSelected = true;
 
       // Detect again: Move to Repair advances into Repair Started.
       await this.waitForRepairStartedStage(shouldStop);
     }
 
-    // State B: Repair Started. Some entries require the asset scanned into the
-    // Repair Started input before its controls enable; fill it when present.
+    // State B: Repair Started. On a direct entry, select and verify the locator
+    // FIRST — before the asset is scanned into Repair — so a locator failure
+    // stops the run without partially processing the asset. After a Move to
+    // Repair step the locator is already committed, so this is skipped.
+    if (!locatorSelected) {
+      await this.selectRepairStartedLocator(shouldStop, repairLocator);
+    }
+
+    // Only once the locator is committed do we enter the asset tag. Some entries
+    // require the asset scanned into the Repair Started input before its
+    // controls enable; fill it when present.
     const repairInput = state.findRepairInput();
 
     if (repairInput) {
+      log("Repair: Entering asset tag");
       await core.typeAndSubmit(repairInput, asset, shouldStop);
       await window.MESPopupHandler.closePopupIfPresent();
     }
@@ -66,6 +82,28 @@ window.MESRepair = {
 
     core.throwIfStopped(shouldStop);
     log(`Done: ${asset}`);
+  },
+
+  // Direct Repair Started entry: locate the locator combobox on the page, then
+  // select + verify it via the shared MESLocatorSelector before any asset scan.
+  async selectRepairStartedLocator(shouldStop, repairLocator) {
+    const core = window.MESCore;
+    const state = window.MESRepairState;
+    const log = window.MESLogger.log;
+
+    const locatorInput = await core.waitForScoped(
+      () => state.findRepairLocatorInput(),
+      core.DEFAULT_TIMEOUT_MS,
+      shouldStop
+    );
+
+    if (!locatorInput) {
+      throw new Error("Repair Started locator input not found");
+    }
+
+    log("Repair: Selecting locator");
+    await window.MESLocatorSelector.select(locatorInput, repairLocator, shouldStop);
+    log("Repair: Locator selected");
   },
 
   // Repair Confirmed: click Confirm Repair, then wait for the page to advance.

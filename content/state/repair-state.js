@@ -59,6 +59,41 @@ window.MESRepairState = {
     }) || null;
   },
 
+  // The locator autocomplete input on the Repair Started page. Identified by
+  // its combobox ARIA (never generated CSS classes), scoped to the Repair
+  // Started section, and explicitly excluding the plain asset-scan field so the
+  // asset tag is never mistaken for the locator. Returns null when absent so
+  // the caller fails safely before any asset is scanned.
+  findRepairLocatorInput() {
+    const core = window.MESCore;
+    const section = this.findRepairSection();
+
+    if (!section) {
+      return null;
+    }
+
+    return [...section.querySelectorAll("input, textarea")].find((input) => {
+      const isCombobox =
+        input.getAttribute("role") === "combobox" ||
+        input.hasAttribute("aria-autocomplete") ||
+        input.hasAttribute("aria-controls") ||
+        input.hasAttribute("aria-owns") ||
+        input.hasAttribute("aria-expanded");
+
+      const isAssetScan = this.selectors.repairScanPlaceholder.test(
+        input.placeholder || ""
+      );
+
+      return (
+        isCombobox &&
+        !isAssetScan &&
+        input.type !== "hidden" &&
+        core.isVisible(input) &&
+        !core.isDisabled(input)
+      );
+    }) || null;
+  },
+
   findRepairFailedButton(requireClickable) {
     const core = window.MESCore;
 
