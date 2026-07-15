@@ -88,180 +88,34 @@ window.MESLocatorSelector = {
     dispatchInput("insertText", finalChar);
     inputEl.dispatchEvent(new KeyboardEvent("keyup", finalKeyInit));
 
-    const suggestion = await core.waitForScoped(
-      () => this.findSuggestion(inputEl, locator),
-      core.DEFAULT_TIMEOUT_MS,
-      shouldStop
-    );
-
-    if (!suggestion) {
-      throw new Error(
-        `Locator autocomplete suggestion for "${locator}" did not appear`
-      );
-    }
-
-    // ---- TEMPORARY DIAGNOSTIC HARNESS ------------------------------------
-    // Throwaway debugging: run a fixed sequence of commit gestures, verifying
-    // after each with the existing verifyCommitted(), and stop at the first
-    // that commits. Discovers which interaction Meta's autocomplete accepts.
-    // The suggestion lookup above and verifyCommitted() below are the existing
-    // helpers, unchanged.
+    // ---- TEMPORARY DIAGNOSTIC PROBE --------------------------------------
+    // ALL commit logic removed on purpose: do not wait for a suggestion, do not
+    // click, do not verify. Only observe whether the dropdown ever opens during
+    // automation. After typing, poll the combobox state every 100 ms for 5 s.
     const log = window.MESLogger.log;
 
-    const pressableSelector =
-      '[data-pressable-container], [data-interactive-id], button, [role="button"]';
-
-    const getOption = () => this.findSuggestion(inputEl, locator);
-
-    const centre = (node) => {
-      const rect = node.getBoundingClientRect();
-      return {
-        clientX: rect.left + rect.width / 2,
-        clientY: rect.top + rect.height / 2
-      };
-    };
-
-    const pointer = (type, node, buttons) => {
-      const Ctor =
-        typeof PointerEvent === "function" ? PointerEvent : MouseEvent;
-
-      node.dispatchEvent(
-        new Ctor(type, {
-          bubbles: type !== "pointerenter",
-          cancelable: true,
-          view: window,
-          ...centre(node),
-          pointerId: 1,
-          pointerType: "mouse",
-          isPrimary: true,
-          button: 0,
-          buttons
-        })
-      );
-    };
-
-    const mouse = (type, node, buttons) => {
-      node.dispatchEvent(
-        new MouseEvent(type, {
-          bubbles: true,
-          cancelable: true,
-          view: window,
-          ...centre(node),
-          button: 0,
-          buttons
-        })
-      );
-    };
-
-    const key = (type, node, keyName, code, keyCode) => {
-      node.dispatchEvent(
-        new KeyboardEvent(type, {
-          key: keyName,
-          code,
-          keyCode,
-          which: keyCode,
-          bubbles: true,
-          cancelable: true
-        })
-      );
-    };
-
-    // Each strategy performs EXACTLY ONE commit gesture and nothing else. The
-    // loop below owns the verify/log/stop control flow, so strategies stay
-    // isolated to their single interaction.
-    const strategies = [
-      // Strategy 1: current implementation — MESCore.dispatchClick(option).
-      async () => {
-        const option = getOption();
-        if (option) {
-          await core.dispatchClick(option, 75, 300, shouldStop);
-        }
-      },
-      // Strategy 2: PointerEvents on the option; no element.focus().
-      async () => {
-        const option = getOption();
-        if (!option) return;
-        pointer("pointerover", option, 0);
-        pointer("pointerenter", option, 0);
-        pointer("pointerdown", option, 1);
-        pointer("pointerup", option, 0);
-        mouse("click", option, 0);
-      },
-      // Strategy 3: PointerEvents on the nearest pressable ancestor.
-      async () => {
-        const option = getOption();
-        const target = option && option.closest(pressableSelector);
-        if (!target) return;
-        pointer("pointerover", target, 0);
-        pointer("pointerenter", target, 0);
-        pointer("pointerdown", target, 1);
-        pointer("pointerup", target, 0);
-        mouse("click", target, 0);
-      },
-      // Strategy 4: Enter on the input; keep focus on the input, no click.
-      async () => {
-        inputEl.focus();
-        key("keydown", inputEl, "Enter", "Enter", 13);
-        key("keyup", inputEl, "Enter", "Enter", 13);
-      },
-      // Strategy 5: Tab on the input; keep focus on the input.
-      async () => {
-        inputEl.focus();
-        key("keydown", inputEl, "Tab", "Tab", 9);
-        key("keyup", inputEl, "Tab", "Tab", 9);
-      },
-      // Strategy 6: option.click() directly; no focus changes.
-      async () => {
-        const option = getOption();
-        if (option) option.click();
-      },
-      // Strategy 7: Mouse events only on the option; no element.focus().
-      async () => {
-        const option = getOption();
-        if (!option) return;
-        mouse("mouseover", option, 0);
-        mouse("mousedown", option, 1);
-        mouse("mouseup", option, 0);
-        mouse("click", option, 0);
-      }
-    ];
-
-    for (let i = 0; i < strategies.length; i++) {
-      const n = i + 1;
-
+    for (let elapsed = 0; elapsed < 5000; elapsed += 100) {
       core.throwIfStopped(shouldStop);
-      log(`Locator Strategy ${n}...`);
 
-      await strategies[i]();
+      const listboxId =
+        inputEl.getAttribute("aria-controls") ||
+        inputEl.getAttribute("aria-owns");
+      const listbox =
+        (listboxId && document.getElementById(listboxId)) ||
+        document.querySelector('[role="listbox"]');
+      const optionCount = listbox
+        ? listbox.querySelectorAll('[role="option"]').length
+        : 0;
 
-      // Wait briefly (existing timing), then run the existing commit check.
-      await core.sleep(LOCATOR_INPUT_SETTLE_MS, shouldStop);
+      log(
+        `Locator probe t=${elapsed}ms | value="${inputEl.value}" ` +
+          `aria-expanded=${inputEl.getAttribute("aria-expanded")} ` +
+          `aria-activedescendant=${inputEl.getAttribute("aria-activedescendant")} ` +
+          `listbox=${Boolean(listbox)} options=${optionCount}`
+      );
 
-      if (await this.verifyCommitted(inputEl, locator, shouldStop)) {
-        log(`Locator Strategy ${n} SUCCESS`);
-        return;
-      }
-
-      log(`Locator Strategy ${n} FAILED`);
+      await core.sleep(100, shouldStop);
     }
-
-    log("Locator: All strategies failed");
-    throw new Error(`Locator "${locator}" was not committed after selection`);
-  },
-
-  // Existing commit verification, extracted so the diagnostic harness can call
-  // it after each strategy: poll (existing timeout) until the field reflects the
-  // chosen locator; return a boolean so the caller can branch.
-  async verifyCommitted(inputEl, locator, shouldStop) {
-    const core = window.MESCore;
-
-    const committed = await core.waitForScoped(
-      () => ((inputEl.value || "").includes(locator) ? inputEl : null),
-      LOCATOR_VERIFY_TIMEOUT_MS,
-      shouldStop
-    );
-
-    return Boolean(committed);
   },
 
   findSuggestion(inputEl, locator) {
