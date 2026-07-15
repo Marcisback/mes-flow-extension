@@ -18,6 +18,9 @@ const CORE_SCOPED_POLL_MS = 150;
 // Poll interval for the popup-closing poller (waitForElement).
 const CORE_ELEMENT_POLL_MS = 250;
 
+// Delay between characters for typeHuman (incremental typing cadence).
+const CORE_TYPE_DELAY_MS = 30;
+
 window.MESCore = {
   DEFAULT_TIMEOUT_MS: 15000,
   STOP_CHECK_INTERVAL_MS: 100,
@@ -66,6 +69,59 @@ window.MESCore = {
     });
 
     await this.sleep(400, shouldStop);
+  },
+
+  // Type `value` into an input one character at a time with the full key/input
+  // lifecycle per character (keydown -> keypress -> React-compatible value
+  // append -> input[insertText] -> keyup), clearing any existing value first.
+  // Some components (e.g. certain autocompletes) only react to genuine
+  // incremental typing rather than a single bulk value assignment.
+  async typeHuman(inputEl, value, shouldStop) {
+    this.throwIfStopped(shouldStop);
+    inputEl.focus();
+
+    const nativeSetter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value"
+    ).set;
+
+    // Clear any existing value first.
+    nativeSetter.call(inputEl, "");
+    inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+
+    let typed = "";
+
+    for (const char of value) {
+      this.throwIfStopped(shouldStop);
+
+      const keyInit = {
+        key: char,
+        keyCode: char.charCodeAt(0),
+        which: char.charCodeAt(0),
+        bubbles: true,
+        cancelable: true
+      };
+
+      inputEl.dispatchEvent(new KeyboardEvent("keydown", keyInit));
+      inputEl.dispatchEvent(new KeyboardEvent("keypress", keyInit));
+
+      typed += char;
+      nativeSetter.call(inputEl, typed);
+
+      inputEl.dispatchEvent(
+        typeof InputEvent === "function"
+          ? new InputEvent("input", {
+              bubbles: true,
+              inputType: "insertText",
+              data: char
+            })
+          : new Event("input", { bubbles: true })
+      );
+
+      inputEl.dispatchEvent(new KeyboardEvent("keyup", keyInit));
+
+      await this.sleep(CORE_TYPE_DELAY_MS, shouldStop);
+    }
   },
 
   async waitForInputByPlaceholderRegex(
