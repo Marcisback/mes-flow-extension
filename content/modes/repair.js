@@ -85,9 +85,10 @@ window.MESRepair = {
   },
 
   // Direct Repair Started entry: locate the locator combobox on the page, then
-  // select + verify it automatically via the shared MESLocatorSelector (which
-  // types the locator incrementally) before any asset scan. Fail-closed: if the
-  // suggestion never appears or the value does not commit, this throws and the
+  // select + verify it via the shared MESLocatorSelector, which drives the
+  // combobox by keyboard navigation (open, ArrowDown to the matching option,
+  // Enter), before any asset scan. Fail-closed: if the dropdown never opens, the
+  // locator is not found, or the value does not commit, this throws and the
   // asset is skipped before the tag is entered.
   async selectRepairStartedLocator(shouldStop, repairLocator) {
     const core = window.MESCore;

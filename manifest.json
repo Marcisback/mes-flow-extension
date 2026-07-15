@@ -24,7 +24,6 @@
       "js": [
         "content/shared/logger.js",
         "content/shared/storage.js",
-        "content/shared/queue.js",
         "content/shared/popup-handler.js",
         "content/shared/core.js",
         "content/state/shared-state.js",
