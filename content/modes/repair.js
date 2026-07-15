@@ -5,20 +5,16 @@ const REPAIR_OPTIONAL_CONFIRM_TIMEOUT_MS = 4000;
 const REPAIR_ADVANCE_TIMEOUT_MS = 10000;
 
 // State-aware Repair mode. It does not assume it starts at Move to Repair; it
-// detects the current stage and reuses the shared workflow actions
-// (MESMoveToRepair + MESFailureDialog) and the Repair Cleanup read-only
-// detectors rather than duplicating any of them.
+// detects the current stage (via MESRepairState) and reuses the shared workflow
+// actions (MESMoveToRepair + MESFailureDialog) rather than duplicating any of
+// them. This file holds Repair workflow/orchestration only.
 window.MESRepair = {
-  selectors: {
-    repairFailedText: /^Repair failed$/i,
-    confirmRepairText: /^Confirm\s+repair$/i
-  },
-
   // options.repairOutcome: "confirmed" (default) | "failed".
   // options.repairLocator: Move to Repair location; defaults to the standard
   // repair locator when unset.
   async processAsset(asset, shouldStop, options = {}) {
     const core = window.MESCore;
+    const state = window.MESRepairState;
     const log = window.MESLogger.log;
 
     const outcome = options.repairOutcome === "failed" ? "failed" : "confirmed";
@@ -31,7 +27,7 @@ window.MESRepair = {
     // Load the asset through the landing scan when it is present. This is
     // best-effort: when the page is already parked on a Repair stage there is
     // no landing scan and we go straight to state detection.
-    const landingScan = this.findLandingScanInput();
+    const landingScan = state.findLandingScanInput();
 
     if (landingScan) {
       await core.typeAndSubmit(landingScan, asset, shouldStop);
@@ -55,7 +51,7 @@ window.MESRepair = {
 
     // State B: Repair Started. Some entries require the asset scanned into the
     // Repair Started input before its controls enable; fill it when present.
-    const repairInput = this.findRepairInput();
+    const repairInput = state.findRepairInput();
 
     if (repairInput) {
       await core.typeAndSubmit(repairInput, asset, shouldStop);
@@ -78,7 +74,7 @@ window.MESRepair = {
     const log = window.MESLogger.log;
 
     const confirmRepair = await core.waitForClickableByText(
-      this.selectors.confirmRepairText,
+      window.MESRepairState.selectors.confirmRepairText,
       core.DEFAULT_TIMEOUT_MS,
       shouldStop
     );
@@ -89,7 +85,7 @@ window.MESRepair = {
     log("Repair: Confirmed");
   },
 
-  // Repair Failed: click Repair Failed, reuse the entire MRI failure-reason
+  // Repair Failed: click Repair Failed, reuse the entire shared failure-reason
   // dialog, then confirm the repair when a Confirm Repair button is present
   // (Variant 1). Variant 2 has no Confirm Repair, so completion follows the
   // failure confirmation directly.
@@ -98,7 +94,7 @@ window.MESRepair = {
     const log = window.MESLogger.log;
 
     const repairFailedButton = await core.waitForClickableByText(
-      this.selectors.repairFailedText,
+      window.MESRepairState.selectors.repairFailedText,
       core.DEFAULT_TIMEOUT_MS,
       shouldStop
     );
@@ -120,26 +116,9 @@ window.MESRepair = {
     }
   },
 
-  isMoveToRepairStage() {
-    // Stable signals: a "Move to Repair" section holding a locator input plus
-    // the Confirm move button (aria-label), never generated CSS classes.
-    return Boolean(
-      window.MESMoveToRepair.findMoveToRepairInput() &&
-        this.findConfirmMoveButton()
-    );
-  },
-
-  isRepairStartedStage() {
-    // Stable signals: the innermost "Repair" + "Started" section plus a
-    // "Repair failed" control (matched by button text). Delegates to the
-    // Repair Cleanup read-only detectors to avoid duplicating them.
-    return Boolean(
-      this.findRepairStartedSection() && this.findRepairFailedButton(false)
-    );
-  },
-
   async waitForEntryStage(shouldStop) {
     const core = window.MESCore;
+    const state = window.MESRepairState;
     const start = Date.now();
 
     while (Date.now() - start < core.DEFAULT_TIMEOUT_MS) {
@@ -147,11 +126,11 @@ window.MESRepair = {
       await window.MESPopupHandler.closePopupIfPresent();
       core.throwIfStopped(shouldStop);
 
-      if (this.isMoveToRepairStage()) {
+      if (state.isMoveToRepairStage()) {
         return "moveToRepair";
       }
 
-      if (this.isRepairStartedStage()) {
+      if (state.isRepairStartedStage()) {
         return "repairStarted";
       }
 
@@ -165,6 +144,7 @@ window.MESRepair = {
 
   async waitForRepairStartedStage(shouldStop) {
     const core = window.MESCore;
+    const state = window.MESRepairState;
     const start = Date.now();
 
     while (Date.now() - start < core.DEFAULT_TIMEOUT_MS) {
@@ -172,7 +152,7 @@ window.MESRepair = {
       await window.MESPopupHandler.closePopupIfPresent();
       core.throwIfStopped(shouldStop);
 
-      if (this.isRepairStartedStage()) {
+      if (state.isRepairStartedStage()) {
         return true;
       }
 
@@ -186,6 +166,7 @@ window.MESRepair = {
   // (never throws) so the Variant 2 "Repair Failed only" page completes cleanly.
   async waitForOptionalConfirmRepair(shouldStop) {
     const core = window.MESCore;
+    const state = window.MESRepairState;
     const start = Date.now();
 
     while (Date.now() - start < REPAIR_OPTIONAL_CONFIRM_TIMEOUT_MS) {
@@ -193,7 +174,7 @@ window.MESRepair = {
       await window.MESPopupHandler.closePopupIfPresent();
       core.throwIfStopped(shouldStop);
 
-      const confirmRepair = this.findConfirmRepairButton(true);
+      const confirmRepair = state.findConfirmRepairButton(true);
 
       if (confirmRepair) {
         return confirmRepair;
@@ -207,7 +188,8 @@ window.MESRepair = {
 
   async waitForConfirmRepairToClear(shouldStop) {
     const advanced = await window.MESCore.waitForScoped(
-      () => (this.findConfirmRepairButton(false) ? null : true),
+      () =>
+        window.MESRepairState.findConfirmRepairButton(false) ? null : true,
       REPAIR_ADVANCE_TIMEOUT_MS,
       shouldStop
     );
@@ -215,52 +197,5 @@ window.MESRepair = {
     if (!advanced) {
       throw new Error("Repair page did not advance after Confirm Repair");
     }
-  },
-
-  findLandingScanInput() {
-    const core = window.MESCore;
-
-    return (
-      [...document.querySelectorAll("input, textarea")].find((input) => {
-        return (
-          core.selectors.firstScanText.test(input.placeholder || "") &&
-          core.isVisible(input)
-        );
-      }) || null
-    );
-  },
-
-  findConfirmMoveButton() {
-    const core = window.MESCore;
-    const button = document.querySelector('button[aria-label="Confirm move"]');
-
-    return button && core.isVisible(button) ? button : null;
-  },
-
-  findConfirmRepairButton(requireClickable) {
-    const core = window.MESCore;
-
-    return (
-      [...document.querySelectorAll(core.buttonSelector())].find((button) => {
-        return (
-          this.selectors.confirmRepairText.test(core.getElementText(button)) &&
-          core.isVisible(button) &&
-          (!requireClickable || !core.isDisabled(button))
-        );
-      }) || null
-    );
-  },
-
-  // Read-only reuse of the Repair Cleanup detectors (never modified here).
-  findRepairStartedSection() {
-    return window.MESRepairCleanup.findRepairSection();
-  },
-
-  findRepairInput() {
-    return window.MESRepairCleanup.findRepairInput() || null;
-  },
-
-  findRepairFailedButton(requireClickable) {
-    return window.MESRepairCleanup.findRepairFailedButton(requireClickable) || null;
   }
 };

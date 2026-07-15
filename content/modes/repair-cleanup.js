@@ -2,14 +2,9 @@ const REPAIR_FINAL_SETTLE_MS = 400;
 const REPAIR_STATE_TIMEOUT_MS = 2500;
 const REPAIR_POLL_MS = 100;
 
+// Repair Cleanup (EOL HANDOVER) mode. Workflow/orchestration only; stage
+// detection lives in MESRepairState.
 window.MESRepairCleanup = {
-  selectors: {
-    repairScanPlaceholder: /^Scan asset tag or serial number$/i,
-    repairFailedText: /^Repair failed$/i,
-    eolText: /\bEOL\b|End of Line/i,
-    wipeText: /\bWipe\b/i
-  },
-
   async processAsset(asset, shouldStop) {
     const core = window.MESCore;
     const log = window.MESLogger.log;
@@ -48,14 +43,9 @@ window.MESRepairCleanup = {
     log(`Done: ${asset}`);
   },
 
-  isRepairStartedState(asset) {
-    void asset;
-
-    return Boolean(this.findRepairSection() && this.findRepairInput());
-  },
-
   async waitForRepairState(shouldStop) {
     const core = window.MESCore;
+    const state = window.MESRepairState;
     const start = Date.now();
 
     while (Date.now() - start < REPAIR_STATE_TIMEOUT_MS) {
@@ -63,8 +53,8 @@ window.MESRepairCleanup = {
       await window.MESPopupHandler.closePopupIfPresent();
       core.throwIfStopped(shouldStop);
 
-      const repairSection = this.findRepairSection();
-      const repairInput = this.findRepairInput();
+      const repairSection = state.findRepairSection();
+      const repairInput = state.findRepairInput();
 
       if (repairSection && repairInput) {
         return {
@@ -74,7 +64,7 @@ window.MESRepairCleanup = {
       }
 
       if (
-        this.isPastRepairStateVisible() &&
+        state.isPastRepairStateVisible() &&
         !repairSection &&
         !repairInput
       ) {
@@ -93,6 +83,7 @@ window.MESRepairCleanup = {
 
   async waitForRepairFailedButton(shouldStop) {
     const core = window.MESCore;
+    const state = window.MESRepairState;
     const start = Date.now();
 
     while (Date.now() - start < REPAIR_STATE_TIMEOUT_MS) {
@@ -100,7 +91,7 @@ window.MESRepairCleanup = {
       await window.MESPopupHandler.closePopupIfPresent();
       core.throwIfStopped(shouldStop);
 
-      const repairFailedButton = this.findRepairFailedButton(true);
+      const repairFailedButton = state.findRepairFailedButton(true);
 
       if (repairFailedButton) {
         return repairFailedButton;
@@ -110,71 +101,5 @@ window.MESRepairCleanup = {
     }
 
     throw new window.MESAssetError("Repair failed button not enabled");
-  },
-
-  findRepairSection() {
-    const core = window.MESCore;
-
-    const sections = [
-      ...document.querySelectorAll(
-        "section, form, article, [role='region'], [role='group'], div"
-      )
-    ].filter((section) => {
-      const text = core.getElementText(section);
-
-      return (
-        core.isVisible(section) &&
-        /\bRepair\b/i.test(text) &&
-        /\bStarted\b/i.test(text)
-      );
-    });
-
-    return sections.find((section) => {
-      return !sections.some((other) => {
-        return section !== other && section.contains(other);
-      });
-    }) || null;
-  },
-
-  findRepairInput() {
-    const core = window.MESCore;
-
-    return [...document.querySelectorAll("input, textarea")].find((input) => {
-      return (
-        this.selectors.repairScanPlaceholder.test(input.placeholder || "") &&
-        core.isVisible(input) &&
-        !core.isDisabled(input)
-      );
-    });
-  },
-
-  findRepairFailedButton(requireClickable) {
-    const core = window.MESCore;
-
-    return [...document.querySelectorAll(core.buttonSelector())].find(
-      (button) => {
-        return (
-          this.selectors.repairFailedText.test(core.getElementText(button)) &&
-          core.isVisible(button) &&
-          (!requireClickable || !core.isDisabled(button))
-        );
-      }
-    );
-  },
-
-  isPastRepairStateVisible() {
-    const core = window.MESCore;
-
-    return [...document.querySelectorAll("h1, h2, h3, h4, span, div, label")]
-      .some((element) => {
-        const text = core.getElementText(element);
-
-        return (
-          core.isVisible(element) &&
-          text.length <= 80 &&
-          (this.selectors.eolText.test(text) ||
-            this.selectors.wipeText.test(text))
-        );
-      });
   }
 };
