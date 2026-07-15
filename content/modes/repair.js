@@ -1,6 +1,6 @@
 const REPAIR_DEFAULT_LOCATOR = "NEW102-SMOBILE1-EOL-11-D01";
 const REPAIR_SETTLE_MS = 300;
-const REPAIR_POLL_MS = 150;
+const REPAIR_STAGE_POLL_MS = 150;
 const REPAIR_OPTIONAL_CONFIRM_TIMEOUT_MS = 4000;
 const REPAIR_ADVANCE_TIMEOUT_MS = 10000;
 
@@ -134,7 +134,7 @@ window.MESRepair = {
         return "repairStarted";
       }
 
-      await core.sleep(REPAIR_POLL_MS, shouldStop);
+      await core.sleep(REPAIR_STAGE_POLL_MS, shouldStop);
     }
 
     throw new Error(
@@ -156,7 +156,7 @@ window.MESRepair = {
         return true;
       }
 
-      await core.sleep(REPAIR_POLL_MS, shouldStop);
+      await core.sleep(REPAIR_STAGE_POLL_MS, shouldStop);
     }
 
     throw new Error("Repair Started stage did not appear after Move to Repair");
@@ -180,7 +180,7 @@ window.MESRepair = {
         return confirmRepair;
       }
 
-      await core.sleep(REPAIR_POLL_MS, shouldStop);
+      await core.sleep(REPAIR_STAGE_POLL_MS, shouldStop);
     }
 
     return null;
