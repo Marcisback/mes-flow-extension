@@ -5,9 +5,9 @@ const REPAIR_OPTIONAL_CONFIRM_TIMEOUT_MS = 4000;
 const REPAIR_ADVANCE_TIMEOUT_MS = 10000;
 
 // State-aware Repair mode. It does not assume it starts at Move to Repair; it
-// detects the current stage and reuses the production MRI (FAIL) helpers
-// (completeMoveToRepair + completeFailureReasonDialog) and the Repair Cleanup
-// read-only detectors rather than duplicating any of them.
+// detects the current stage and reuses the shared workflow actions
+// (MESMoveToRepair + MESFailureDialog) and the Repair Cleanup read-only
+// detectors rather than duplicating any of them.
 window.MESRepair = {
   selectors: {
     repairFailedText: /^Repair failed$/i,
@@ -19,7 +19,6 @@ window.MESRepair = {
   // repair locator when unset.
   async processAsset(asset, shouldStop, options = {}) {
     const core = window.MESCore;
-    const mri = window.MESMRI;
     const log = window.MESLogger.log;
 
     const outcome = options.repairOutcome === "failed" ? "failed" : "confirmed";
@@ -45,9 +44,9 @@ window.MESRepair = {
     const stage = await this.waitForEntryStage(shouldStop);
 
     if (stage === "moveToRepair") {
-      // Reuse the MRI (FAIL) production Move to Repair implementation, passing
-      // the configured locator instead of the MRI (FAIL) default.
-      await mri.completeMoveToRepair(shouldStop, repairLocator);
+      // Reuse the shared Move to Repair action, passing the configured locator
+      // instead of the MRI (FAIL) default.
+      await window.MESMoveToRepair.complete(shouldStop, repairLocator);
       log("Repair: Move to Repair confirmed");
 
       // Detect again: Move to Repair advances into Repair Started.
@@ -96,7 +95,6 @@ window.MESRepair = {
   // failure confirmation directly.
   async completeRepairFailed(shouldStop) {
     const core = window.MESCore;
-    const mri = window.MESMRI;
     const log = window.MESLogger.log;
 
     const repairFailedButton = await core.waitForClickableByText(
@@ -107,9 +105,9 @@ window.MESRepair = {
 
     await core.dispatchClick(repairFailedButton, 75, 300, shouldStop);
 
-    // Reuse the MRI (FAIL) failure-reason dialog verbatim (dialog detection,
+    // Reuse the shared failure-reason dialog verbatim (dialog detection,
     // Phone - Display selection, Confirm Failure and verification).
-    await mri.completeFailureReasonDialog(shouldStop, "Repair");
+    await window.MESFailureDialog.complete(shouldStop, "Repair");
 
     const confirmRepair = await this.waitForOptionalConfirmRepair(shouldStop);
 
@@ -126,7 +124,8 @@ window.MESRepair = {
     // Stable signals: a "Move to Repair" section holding a locator input plus
     // the Confirm move button (aria-label), never generated CSS classes.
     return Boolean(
-      window.MESMRI.findMoveToRepairInput() && this.findConfirmMoveButton()
+      window.MESMoveToRepair.findMoveToRepairInput() &&
+        this.findConfirmMoveButton()
     );
   },
 
