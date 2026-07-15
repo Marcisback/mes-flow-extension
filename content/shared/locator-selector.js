@@ -18,6 +18,10 @@ window.MESLocatorSelector = {
       throw new Error("Locator input element was not provided");
     }
 
+    if (!locator) {
+      throw new Error("Locator string was empty; nothing to select");
+    }
+
     core.throwIfStopped(shouldStop);
     inputEl.focus();
 
@@ -27,53 +31,62 @@ window.MESLocatorSelector = {
       "value"
     ).set;
 
-    // Clear any existing value first.
-    nativeSetter.call(inputEl, "");
+    // Set the complete locator, then let React commit the value.
+    nativeSetter.call(inputEl, locator);
     inputEl.dispatchEvent(new Event("input", { bubbles: true }));
 
-    // Enter the locator one character at a time. Some locator comboboxes react
-    // to real incremental keyboard input rather than a single bulk value
-    // assignment, so each character is entered with a full
-    // keydown -> keypress -> value append -> input -> keyup sequence.
-    let typed = "";
-
-    for (const char of locator) {
-      core.throwIfStopped(shouldStop);
-
-      const keyInit = {
-        key: char,
-        keyCode: char.charCodeAt(0),
-        which: char.charCodeAt(0),
-        bubbles: true,
-        cancelable: true
-      };
-
-      inputEl.dispatchEvent(new KeyboardEvent("keydown", keyInit));
-      inputEl.dispatchEvent(new KeyboardEvent("keypress", keyInit));
-
-      typed += char;
-      nativeSetter.call(inputEl, typed);
-      inputEl.dispatchEvent(new Event("input", { bubbles: true }));
-
-      inputEl.dispatchEvent(new KeyboardEvent("keyup", keyInit));
-    }
-
-    // Wait briefly for React to process the incremental input before navigating.
     await core.sleep(LOCATOR_INPUT_SETTLE_MS, shouldStop);
 
-    // Some locator comboboxes only open their suggestion listbox in response to
-    // a keyboard event, not on input alone. Nudge it open with ArrowDown before
-    // polling; this is harmless for comboboxes that already show suggestions.
-    inputEl.dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key: "ArrowDown",
-        code: "ArrowDown",
-        keyCode: 40,
-        which: 40,
-        bubbles: true,
-        cancelable: true
-      })
-    );
+    // Live testing shows this autocomplete only opens its list when the
+    // committed value is *edited* — a bulk set (even followed by ArrowDown) and
+    // a full character-by-character replay do not trigger it. So place the caret
+    // at the end, delete the final character with a realistic Backspace, then
+    // re-enter that same character, mirroring the exact edit a user makes.
+    const finalChar = locator.slice(-1);
+    const withoutFinal = locator.slice(0, -1);
+
+    inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+
+    // Dispatch an input event carrying inputType (and data) when InputEvent is
+    // available; fall back to a plain bubbling input event otherwise.
+    const dispatchInput = (inputType, data) => {
+      const event =
+        typeof InputEvent === "function"
+          ? new InputEvent("input", { bubbles: true, inputType, data })
+          : new Event("input", { bubbles: true });
+
+      inputEl.dispatchEvent(event);
+    };
+
+    const backspaceInit = {
+      key: "Backspace",
+      code: "Backspace",
+      keyCode: 8,
+      which: 8,
+      bubbles: true,
+      cancelable: true
+    };
+
+    // Remove the final character (Backspace edit).
+    inputEl.dispatchEvent(new KeyboardEvent("keydown", backspaceInit));
+    nativeSetter.call(inputEl, withoutFinal);
+    dispatchInput("deleteContentBackward", null);
+    inputEl.dispatchEvent(new KeyboardEvent("keyup", backspaceInit));
+
+    // Re-enter the original final character.
+    const finalKeyInit = {
+      key: finalChar,
+      keyCode: finalChar.charCodeAt(0),
+      which: finalChar.charCodeAt(0),
+      bubbles: true,
+      cancelable: true
+    };
+
+    inputEl.dispatchEvent(new KeyboardEvent("keydown", finalKeyInit));
+    inputEl.dispatchEvent(new KeyboardEvent("keypress", finalKeyInit));
+    nativeSetter.call(inputEl, locator);
+    dispatchInput("insertText", finalChar);
+    inputEl.dispatchEvent(new KeyboardEvent("keyup", finalKeyInit));
 
     const suggestion = await core.waitForScoped(
       () => this.findSuggestion(inputEl, locator),
