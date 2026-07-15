@@ -101,28 +101,15 @@ window.MESMRI = {
     log(`Done: ${asset}`);
   },
 
+  // Wait for a step's scan input (Wipe / Diagnostic). Detection lives in
+  // MESMriState; this only adds the popup-closing wait.
   async waitForStepInput(stepName, shouldStop) {
     const core = window.MESCore;
 
-    return core.waitForElement(() => {
-      const sections = [...document.querySelectorAll("div, section, form")];
-
-      const stepSection = sections.find((section) => {
-        const text = section.innerText || "";
-        return text.includes(stepName) && text.includes("Asset tag or serial number");
-      });
-
-      if (!stepSection) return null;
-
-      return [...stepSection.querySelectorAll("input, textarea")].find((input) => {
-        const placeholder = input.placeholder || "";
-
-        return (
-          /Scan asset tag or serial number/i.test(placeholder) &&
-          core.isVisible(input) &&
-          !core.isDisabled(input)
-        );
-      });
-    }, core.DEFAULT_TIMEOUT_MS, shouldStop);
+    return core.waitForElement(
+      () => window.MESMriState.findStepInput(stepName),
+      core.DEFAULT_TIMEOUT_MS,
+      shouldStop
+    );
   }
 };

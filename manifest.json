@@ -30,6 +30,7 @@
         "content/shared/move-to-repair.js",
         "content/shared/failure-dialog.js",
         "content/state/repair-state.js",
+        "content/state/mri-state.js",
         "content/modes/eol.js",
         "content/modes/mri.js",
         "content/modes/repair-cleanup.js",
