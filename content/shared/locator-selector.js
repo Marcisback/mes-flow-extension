@@ -33,6 +33,20 @@ window.MESLocatorSelector = {
     nativeSetter.call(inputEl, locator);
     inputEl.dispatchEvent(new Event("input", { bubbles: true }));
 
+    // Some locator comboboxes only open their suggestion listbox in response to
+    // a keyboard event, not on input alone. Nudge it open with ArrowDown before
+    // polling; this is harmless for comboboxes that already show suggestions.
+    inputEl.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "ArrowDown",
+        code: "ArrowDown",
+        keyCode: 40,
+        which: 40,
+        bubbles: true,
+        cancelable: true
+      })
+    );
+
     const suggestion = await core.waitForScoped(
       () => this.findSuggestion(inputEl, locator),
       core.DEFAULT_TIMEOUT_MS,
