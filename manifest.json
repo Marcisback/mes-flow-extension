@@ -22,14 +22,14 @@
         "https://www.internalfb.com/inventory/manufacturing/reverse/triage*"
       ],
       "js": [
-        "shared/logger.js",
-        "shared/storage.js",
-        "shared/queue.js",
-        "content/popup-handler.js",
-        "content/eol.js",
-        "content/mri.js",
-        "content/repair-cleanup.js",
-        "content/repair.js",
+        "content/shared/logger.js",
+        "content/shared/storage.js",
+        "content/shared/queue.js",
+        "content/shared/popup-handler.js",
+        "content/modes/eol.js",
+        "content/modes/mri.js",
+        "content/modes/repair-cleanup.js",
+        "content/modes/repair.js",
         "content/mes-runner.js"
       ],
       "run_at": "document_idle"
