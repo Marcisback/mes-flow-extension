@@ -84,8 +84,10 @@ window.MESRepair = {
     log(`Done: ${asset}`);
   },
 
-  // Direct Repair Started entry: locate the locator combobox on the page, then
-  // select + verify it via the shared MESLocatorSelector before any asset scan.
+  // Direct Repair Started entry: the locator combobox here ignores programmatic
+  // input, so this is a fail-closed human checkpoint. Pre-fill the locator, then
+  // pause for the operator to open and pick the suggestion. The asset tag is
+  // NEVER entered unless a real selection is positively detected.
   async selectRepairStartedLocator(shouldStop, repairLocator) {
     const core = window.MESCore;
     const state = window.MESRepairState;
@@ -101,8 +103,26 @@ window.MESRepair = {
       throw new Error("Repair Started locator input not found");
     }
 
-    log("Repair: Selecting locator");
-    await window.MESLocatorSelector.select(locatorInput, repairLocator, shouldStop);
+    // Focus + pre-fill the locator value (shared populate; no auto-commit here).
+    await window.MESLocatorSelector.populate(
+      locatorInput,
+      repairLocator,
+      shouldStop
+    );
+
+    // Hand off to the operator and wait for a positively-detected selection.
+    log("Repair: Select the locator suggestion to continue");
+
+    const committed = await window.MESLocatorSelector.waitForManualCommit(
+      locatorInput,
+      repairLocator,
+      shouldStop
+    );
+
+    if (!committed) {
+      throw new Error("Repair locator was not selected");
+    }
+
     log("Repair: Locator selected");
   },
 

@@ -1,17 +1,49 @@
 const LOCATOR_VERIFY_TIMEOUT_MS = 5000;
 const LOCATOR_INPUT_SETTLE_MS = 150;
 
-// Generic locator autocomplete selector. Single responsibility: given an
-// already-located autocomplete input and a target locator string, type the
-// locator, pick the matching suggestion, and confirm it committed. This helper
-// is workflow-agnostic — it does not know whether it serves Move to Repair,
-// Repair Started, or any future workflow. Callers locate their own input field
-// and own their workflow-specific logging.
+// Generic locator autocomplete selector. Workflow-agnostic: callers locate their
+// own input field and own their workflow-specific logging.
+//
+// Two commit paths are exposed because Meta's two locator comboboxes behave
+// differently:
+//   - Move to Repair opens its list from programmatic input, so select() drives
+//     the whole thing automatically.
+//   - Repair Started ignores programmatic input entirely, so its workflow
+//     pre-fills the value with populate() and then relies on a human to open and
+//     pick the suggestion, detected fail-closed by waitForManualCommit().
 window.MESLocatorSelector = {
-  // Select `locator` in the autocomplete owned by `inputEl`. Throws a
-  // descriptive error if the suggestion never appears or the value does not
-  // commit; returns nothing on success.
+  // Automatic selection: type the locator, pick the matching suggestion, verify.
+  // Used by comboboxes whose list opens on programmatic input (Move to Repair).
   async select(inputEl, locator, shouldStop) {
+    const core = window.MESCore;
+
+    await this.populate(inputEl, locator, shouldStop);
+
+    const suggestion = await core.waitForScoped(
+      () => this.findSuggestion(inputEl, locator),
+      core.DEFAULT_TIMEOUT_MS,
+      shouldStop
+    );
+
+    if (!suggestion) {
+      throw new Error(
+        `Locator autocomplete suggestion for "${locator}" did not appear`
+      );
+    }
+
+    await core.dispatchClick(suggestion, 75, 300, shouldStop);
+
+    const committed = await this.verifyCommitted(inputEl, locator, shouldStop);
+
+    if (!committed) {
+      throw new Error(`Locator "${locator}" was not committed after selection`);
+    }
+  },
+
+  // Focus the input and populate the locator using the React-compatible native
+  // setter. Shared by select() and by workflows that drive their own commit
+  // (e.g. the Repair Started human checkpoint).
+  async populate(inputEl, locator, shouldStop) {
     const core = window.MESCore;
 
     if (!inputEl) {
@@ -25,97 +57,66 @@ window.MESLocatorSelector = {
     core.throwIfStopped(shouldStop);
     inputEl.focus();
 
-    // React-compatible value setter (same technique as core.typeAndSubmit).
     const nativeSetter = Object.getOwnPropertyDescriptor(
       HTMLInputElement.prototype,
       "value"
     ).set;
 
-    // Set the complete locator, then let React commit the value.
+    nativeSetter.call(inputEl, "");
+    inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+
     nativeSetter.call(inputEl, locator);
     inputEl.dispatchEvent(new Event("input", { bubbles: true }));
 
     await core.sleep(LOCATOR_INPUT_SETTLE_MS, shouldStop);
+  },
 
-    // Live testing shows this autocomplete only opens its list when the
-    // committed value is *edited* — a bulk set (even followed by ArrowDown) and
-    // a full character-by-character replay do not trigger it. So place the caret
-    // at the end, delete the final character with a realistic Backspace, then
-    // re-enter that same character, mirroring the exact edit a user makes.
-    const finalChar = locator.slice(-1);
-    const withoutFinal = locator.slice(0, -1);
+  // Fail-closed detection of a MANUAL commit, for comboboxes that ignore
+  // programmatic input. The populated value alone is never sufficient (we set
+  // it), so a positive selection requires that the list actually opened (the
+  // user engaged the autocomplete) AND then registered a selection — either an
+  // explicit data-selected marker or the list closing with the matching option
+  // no longer pending. Returns true only when a real selection is detected;
+  // false on timeout.
+  async waitForManualCommit(inputEl, locator, shouldStop) {
+    const core = window.MESCore;
+    const start = Date.now();
+    let sawOpen = false;
 
-    inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
-
-    // Dispatch an input event carrying inputType (and data) when InputEvent is
-    // available; fall back to a plain bubbling input event otherwise.
-    const dispatchInput = (inputType, data) => {
-      const event =
-        typeof InputEvent === "function"
-          ? new InputEvent("input", { bubbles: true, inputType, data })
-          : new Event("input", { bubbles: true });
-
-      inputEl.dispatchEvent(event);
-    };
-
-    const backspaceInit = {
-      key: "Backspace",
-      code: "Backspace",
-      keyCode: 8,
-      which: 8,
-      bubbles: true,
-      cancelable: true
-    };
-
-    // Remove the final character (Backspace edit).
-    inputEl.dispatchEvent(new KeyboardEvent("keydown", backspaceInit));
-    nativeSetter.call(inputEl, withoutFinal);
-    dispatchInput("deleteContentBackward", null);
-    inputEl.dispatchEvent(new KeyboardEvent("keyup", backspaceInit));
-
-    // Re-enter the original final character.
-    const finalKeyInit = {
-      key: finalChar,
-      keyCode: finalChar.charCodeAt(0),
-      which: finalChar.charCodeAt(0),
-      bubbles: true,
-      cancelable: true
-    };
-
-    inputEl.dispatchEvent(new KeyboardEvent("keydown", finalKeyInit));
-    inputEl.dispatchEvent(new KeyboardEvent("keypress", finalKeyInit));
-    nativeSetter.call(inputEl, locator);
-    dispatchInput("insertText", finalChar);
-    inputEl.dispatchEvent(new KeyboardEvent("keyup", finalKeyInit));
-
-    // ---- TEMPORARY DIAGNOSTIC PROBE --------------------------------------
-    // ALL commit logic removed on purpose: do not wait for a suggestion, do not
-    // click, do not verify. Only observe whether the dropdown ever opens during
-    // automation. After typing, poll the combobox state every 100 ms for 5 s.
-    const log = window.MESLogger.log;
-
-    for (let elapsed = 0; elapsed < 5000; elapsed += 100) {
+    while (Date.now() - start < core.DEFAULT_TIMEOUT_MS) {
       core.throwIfStopped(shouldStop);
 
-      const listboxId =
-        inputEl.getAttribute("aria-controls") ||
-        inputEl.getAttribute("aria-owns");
-      const listbox =
-        (listboxId && document.getElementById(listboxId)) ||
-        document.querySelector('[role="listbox"]');
-      const optionCount = listbox
-        ? listbox.querySelectorAll('[role="option"]').length
-        : 0;
+      const expanded = inputEl.getAttribute("aria-expanded") === "true";
+      const pendingOption = this.findSuggestion(inputEl, locator);
+      const open = expanded || Boolean(pendingOption);
 
-      log(
-        `Locator probe t=${elapsed}ms | value="${inputEl.value}" ` +
-          `aria-expanded=${inputEl.getAttribute("aria-expanded")} ` +
-          `aria-activedescendant=${inputEl.getAttribute("aria-activedescendant")} ` +
-          `listbox=${Boolean(listbox)} options=${optionCount}`
-      );
+      if (open) {
+        sawOpen = true;
+      }
 
-      await core.sleep(100, shouldStop);
+      const valueReflects = (inputEl.value || "").includes(locator);
+      const dataSelected = inputEl.getAttribute("data-selected") === "true";
+
+      if (sawOpen && valueReflects && (dataSelected || !open)) {
+        return true;
+      }
+
+      await core.sleep(LOCATOR_INPUT_SETTLE_MS, shouldStop);
     }
+
+    return false;
+  },
+
+  async verifyCommitted(inputEl, locator, shouldStop) {
+    const core = window.MESCore;
+
+    const committed = await core.waitForScoped(
+      () => ((inputEl.value || "").includes(locator) ? inputEl : null),
+      LOCATOR_VERIFY_TIMEOUT_MS,
+      shouldStop
+    );
+
+    return Boolean(committed);
   },
 
   findSuggestion(inputEl, locator) {
