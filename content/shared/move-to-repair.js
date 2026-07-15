@@ -105,13 +105,7 @@ window.MESMoveToRepair = {
       );
     });
 
-    const section = candidates.find((element) => {
-      return !candidates.some(
-        (other) => element !== other && element.contains(other)
-      );
-    });
-
-    const root = section || document;
+    const root = window.MESState.innermost(candidates) || document;
 
     return (
       [...root.querySelectorAll("input, textarea")].find((input) => {

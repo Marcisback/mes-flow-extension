@@ -44,11 +44,7 @@ window.MESRepairState = {
       );
     });
 
-    return sections.find((section) => {
-      return !sections.some((other) => {
-        return section !== other && section.contains(other);
-      });
-    }) || null;
+    return window.MESState.innermost(sections);
   },
 
   findRepairInput() {

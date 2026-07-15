@@ -178,13 +178,7 @@ window.MESFailureDialog = {
       );
     });
 
-    return (
-      candidates.find((element) => {
-        return !candidates.some(
-          (other) => element !== other && element.contains(other)
-        );
-      }) || null
-    );
+    return window.MESState.innermost(candidates);
   },
 
   isOptionSelected(option) {
