@@ -1,4 +1,5 @@
 const LOCATOR_VERIFY_TIMEOUT_MS = 5000;
+const LOCATOR_INPUT_SETTLE_MS = 150;
 
 // Generic locator autocomplete selector. Single responsibility: given an
 // already-located autocomplete input and a target locator string, type the
@@ -20,18 +21,45 @@ window.MESLocatorSelector = {
     core.throwIfStopped(shouldStop);
     inputEl.focus();
 
-    // Set the value React-compatibly (same technique as core.typeAndSubmit)
-    // without submitting, clearing any existing value first.
+    // React-compatible value setter (same technique as core.typeAndSubmit).
     const nativeSetter = Object.getOwnPropertyDescriptor(
       HTMLInputElement.prototype,
       "value"
     ).set;
 
+    // Clear any existing value first.
     nativeSetter.call(inputEl, "");
     inputEl.dispatchEvent(new Event("input", { bubbles: true }));
 
-    nativeSetter.call(inputEl, locator);
-    inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+    // Enter the locator one character at a time. Some locator comboboxes react
+    // to real incremental keyboard input rather than a single bulk value
+    // assignment, so each character is entered with a full
+    // keydown -> keypress -> value append -> input -> keyup sequence.
+    let typed = "";
+
+    for (const char of locator) {
+      core.throwIfStopped(shouldStop);
+
+      const keyInit = {
+        key: char,
+        keyCode: char.charCodeAt(0),
+        which: char.charCodeAt(0),
+        bubbles: true,
+        cancelable: true
+      };
+
+      inputEl.dispatchEvent(new KeyboardEvent("keydown", keyInit));
+      inputEl.dispatchEvent(new KeyboardEvent("keypress", keyInit));
+
+      typed += char;
+      nativeSetter.call(inputEl, typed);
+      inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+
+      inputEl.dispatchEvent(new KeyboardEvent("keyup", keyInit));
+    }
+
+    // Wait briefly for React to process the incremental input before navigating.
+    await core.sleep(LOCATOR_INPUT_SETTLE_MS, shouldStop);
 
     // Some locator comboboxes only open their suggestion listbox in response to
     // a keyboard event, not on input alone. Nudge it open with ArrowDown before
