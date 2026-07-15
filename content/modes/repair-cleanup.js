@@ -1,4 +1,3 @@
-const REPAIR_SHORT_DELAY_MS = 150;
 const REPAIR_FINAL_SETTLE_MS = 400;
 const REPAIR_STATE_TIMEOUT_MS = 2500;
 const REPAIR_POLL_MS = 100;
@@ -12,19 +11,19 @@ window.MESRepairCleanup = {
   },
 
   async processAsset(asset, shouldStop) {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
     const log = window.MESLogger.log;
 
-    eol.throwIfStopped(shouldStop);
+    core.throwIfStopped(shouldStop);
     await window.MESPopupHandler.closePopupIfPresent();
 
-    const scan1 = await eol.waitForInputByPlaceholderRegex(
-      eol.selectors.firstScanText,
-      eol.DEFAULT_TIMEOUT_MS,
+    const scan1 = await core.waitForInputByPlaceholderRegex(
+      core.selectors.firstScanText,
+      core.DEFAULT_TIMEOUT_MS,
       shouldStop
     );
 
-    await eol.typeAndSubmit(scan1, asset, shouldStop);
+    await core.typeAndSubmit(scan1, asset, shouldStop);
 
     const repairState = await this.waitForRepairState(shouldStop);
 
@@ -36,16 +35,16 @@ window.MESRepairCleanup = {
       throw new window.MESAssetError("Repair state not found");
     }
 
-    await eol.typeAndSubmit(repairState.repairInput, asset, shouldStop);
+    await core.typeAndSubmit(repairState.repairInput, asset, shouldStop);
     await window.MESPopupHandler.closePopupIfPresent();
 
     const repairFailedButton = await this.waitForRepairFailedButton(shouldStop);
 
-    await this.fastClick(repairFailedButton, shouldStop);
-    await eol.sleep(REPAIR_FINAL_SETTLE_MS, shouldStop);
+    await core.dispatchClick(repairFailedButton, 150, 150, shouldStop);
+    await core.sleep(REPAIR_FINAL_SETTLE_MS, shouldStop);
     await window.MESPopupHandler.closePopupIfPresent();
 
-    eol.throwIfStopped(shouldStop);
+    core.throwIfStopped(shouldStop);
     log(`Done: ${asset}`);
   },
 
@@ -56,13 +55,13 @@ window.MESRepairCleanup = {
   },
 
   async waitForRepairState(shouldStop) {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
     const start = Date.now();
 
     while (Date.now() - start < REPAIR_STATE_TIMEOUT_MS) {
-      eol.throwIfStopped(shouldStop);
+      core.throwIfStopped(shouldStop);
       await window.MESPopupHandler.closePopupIfPresent();
-      eol.throwIfStopped(shouldStop);
+      core.throwIfStopped(shouldStop);
 
       const repairSection = this.findRepairSection();
       const repairInput = this.findRepairInput();
@@ -84,7 +83,7 @@ window.MESRepairCleanup = {
         };
       }
 
-      await eol.sleep(REPAIR_POLL_MS, shouldStop);
+      await core.sleep(REPAIR_POLL_MS, shouldStop);
     }
 
     return {
@@ -93,13 +92,13 @@ window.MESRepairCleanup = {
   },
 
   async waitForRepairFailedButton(shouldStop) {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
     const start = Date.now();
 
     while (Date.now() - start < REPAIR_STATE_TIMEOUT_MS) {
-      eol.throwIfStopped(shouldStop);
+      core.throwIfStopped(shouldStop);
       await window.MESPopupHandler.closePopupIfPresent();
-      eol.throwIfStopped(shouldStop);
+      core.throwIfStopped(shouldStop);
 
       const repairFailedButton = this.findRepairFailedButton(true);
 
@@ -107,56 +106,24 @@ window.MESRepairCleanup = {
         return repairFailedButton;
       }
 
-      await eol.sleep(REPAIR_POLL_MS, shouldStop);
+      await core.sleep(REPAIR_POLL_MS, shouldStop);
     }
 
     throw new window.MESAssetError("Repair failed button not enabled");
   },
 
-  async fastClick(element, shouldStop) {
-    const eol = window.MESEOL;
-
-    eol.throwIfStopped(shouldStop);
-
-    element.scrollIntoView({ block: "center", inline: "center" });
-
-    await eol.sleep(REPAIR_SHORT_DELAY_MS, shouldStop);
-
-    eol.throwIfStopped(shouldStop);
-
-    element.focus();
-
-    const rect = element.getBoundingClientRect();
-
-    const clickOptions = {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-      clientX: rect.left + rect.width / 2,
-      clientY: rect.top + rect.height / 2
-    };
-
-    element.dispatchEvent(new MouseEvent("mouseover", clickOptions));
-    element.dispatchEvent(new MouseEvent("mousedown", clickOptions));
-
-    eol.throwIfStopped(shouldStop);
-
-    element.dispatchEvent(new MouseEvent("mouseup", clickOptions));
-    element.dispatchEvent(new MouseEvent("click", clickOptions));
-
-    await eol.sleep(REPAIR_SHORT_DELAY_MS, shouldStop);
-  },
-
   findRepairSection() {
+    const core = window.MESCore;
+
     const sections = [
       ...document.querySelectorAll(
         "section, form, article, [role='region'], [role='group'], div"
       )
     ].filter((section) => {
-      const text = this.getElementText(section);
+      const text = core.getElementText(section);
 
       return (
-        window.MESEOL.isVisible(section) &&
+        core.isVisible(section) &&
         /\bRepair\b/i.test(text) &&
         /\bStarted\b/i.test(text)
       );
@@ -170,56 +137,44 @@ window.MESRepairCleanup = {
   },
 
   findRepairInput() {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
 
     return [...document.querySelectorAll("input, textarea")].find((input) => {
       return (
         this.selectors.repairScanPlaceholder.test(input.placeholder || "") &&
-        eol.isVisible(input) &&
-        !eol.isDisabled(input)
+        core.isVisible(input) &&
+        !core.isDisabled(input)
       );
     });
   },
 
   findRepairFailedButton(requireClickable) {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
 
-    return [...document.querySelectorAll(this.buttonSelector())].find(
+    return [...document.querySelectorAll(core.buttonSelector())].find(
       (button) => {
         return (
-          this.selectors.repairFailedText.test(this.getElementText(button)) &&
-          eol.isVisible(button) &&
-          (!requireClickable || !eol.isDisabled(button))
+          this.selectors.repairFailedText.test(core.getElementText(button)) &&
+          core.isVisible(button) &&
+          (!requireClickable || !core.isDisabled(button))
         );
       }
     );
   },
 
   isPastRepairStateVisible() {
+    const core = window.MESCore;
+
     return [...document.querySelectorAll("h1, h2, h3, h4, span, div, label")]
       .some((element) => {
-        const text = this.getElementText(element);
+        const text = core.getElementText(element);
 
         return (
-          window.MESEOL.isVisible(element) &&
+          core.isVisible(element) &&
           text.length <= 80 &&
           (this.selectors.eolText.test(text) ||
             this.selectors.wipeText.test(text))
         );
       });
-  },
-
-  buttonSelector() {
-    return "button, [role='button'], input[type='button'], input[type='submit']";
-  },
-
-  getElementText(element) {
-    return (
-      element.innerText ||
-      element.textContent ||
-      element.value ||
-      element.getAttribute("aria-label") ||
-      ""
-    ).trim();
   }
 };

@@ -1,7 +1,5 @@
 const MRI_SHORT_DELAY_MS = 250;
-const MRI_SETTLE_MS = 300;
 const MRI_FINAL_SETTLE_MS = 500;
-const MRI_FAIL_POLL_MS = 150;
 const MRI_FAIL_DIALOG_TIMEOUT_MS = 10000;
 const MRI_FAIL_OPTION_TIMEOUT_MS = 8000;
 const MRI_FAIL_REASON_LABEL = "Phone - Display";
@@ -10,43 +8,43 @@ const MRI_FAIL_REPAIR_LOCATION = "NEW102-SMOBILE1-TECH-09-F01";
 window.MESMRI = {
   // options.diagnosticOutcome: "success" (default, existing MRI) | "failure" (MRI (FAIL) mode).
   async processAsset(asset, shouldStop, options = {}) {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
     const log = window.MESLogger.log;
     const diagnosticOutcome = options.diagnosticOutcome ?? "success";
 
-    eol.throwIfStopped(shouldStop);
+    core.throwIfStopped(shouldStop);
     await window.MESPopupHandler.closePopupIfPresent();
 
-    const scan1 = await eol.waitForInputByPlaceholderRegex(
-      eol.selectors.firstScanText,
-      eol.DEFAULT_TIMEOUT_MS,
+    const scan1 = await core.waitForInputByPlaceholderRegex(
+      core.selectors.firstScanText,
+      core.DEFAULT_TIMEOUT_MS,
       shouldStop
     );
 
-    await eol.typeAndSubmit(scan1, asset, shouldStop);
-    await eol.sleep(MRI_SHORT_DELAY_MS, shouldStop);
+    await core.typeAndSubmit(scan1, asset, shouldStop);
+    await core.sleep(MRI_SHORT_DELAY_MS, shouldStop);
     await window.MESPopupHandler.closePopupIfPresent();
 
-    const startButton = await eol.waitForClickableByText(
-      eol.selectors.startButtonText,
-      eol.DEFAULT_TIMEOUT_MS,
+    const startButton = await core.waitForClickableByText(
+      core.selectors.startButtonText,
+      core.DEFAULT_TIMEOUT_MS,
       shouldStop
     );
 
-    await eol.safeClick(startButton, shouldStop);
-    await eol.sleep(MRI_SHORT_DELAY_MS, shouldStop);
+    await core.dispatchClick(startButton, 150, 350, shouldStop);
+    await core.sleep(MRI_SHORT_DELAY_MS, shouldStop);
 
     const wipeScan = await this.waitForStepInput("Wipe", shouldStop);
 
-    await eol.typeAndSubmit(wipeScan, asset, shouldStop);
+    await core.typeAndSubmit(wipeScan, asset, shouldStop);
 
-    const confirmWipeButton = await eol.waitForClickableByText(
+    const confirmWipeButton = await core.waitForClickableByText(
       /Confirm\s+wipe/i,
-      eol.DEFAULT_TIMEOUT_MS,
+      core.DEFAULT_TIMEOUT_MS,
       shouldStop
     );
 
-    await this.fastClick(confirmWipeButton, shouldStop);
+    await core.dispatchClick(confirmWipeButton, 75, 300, shouldStop);
     await window.MESPopupHandler.closePopupIfPresent();
 
     if (diagnosticOutcome === "failure") {
@@ -55,24 +53,24 @@ window.MESMRI = {
 
     const diagnosticScan = await this.waitForStepInput("Diagnostic", shouldStop);
 
-    await eol.typeAndSubmit(diagnosticScan, asset, shouldStop);
+    await core.typeAndSubmit(diagnosticScan, asset, shouldStop);
 
     if (diagnosticOutcome === "failure") {
       await this.completeFailedDiagnostic(asset, shouldStop);
       return;
     }
 
-    const confirmDiagnosticButton = await eol.waitForClickableByText(
+    const confirmDiagnosticButton = await core.waitForClickableByText(
       /Confirm\s+diagnostic/i,
-      eol.DEFAULT_TIMEOUT_MS,
+      core.DEFAULT_TIMEOUT_MS,
       shouldStop
     );
 
-    await this.fastClick(confirmDiagnosticButton, shouldStop);
-    await eol.sleep(MRI_FINAL_SETTLE_MS, shouldStop);
+    await core.dispatchClick(confirmDiagnosticButton, 75, 300, shouldStop);
+    await core.sleep(MRI_FINAL_SETTLE_MS, shouldStop);
 
     await window.MESPopupHandler.closePopupIfPresent();
-    eol.throwIfStopped(shouldStop);
+    core.throwIfStopped(shouldStop);
 
     log(`Done: ${asset}`);
   },
@@ -80,12 +78,12 @@ window.MESMRI = {
   // MRI (FAIL) diagnostic branch: reject the diagnostic with a fixed failure
   // reason instead of confirming it, then move the asset to a repair location.
   async completeFailedDiagnostic(asset, shouldStop) {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
     const log = window.MESLogger.log;
 
-    const failedButton = await this.waitForFailureElement(
+    const failedButton = await core.waitForScoped(
       () => document.querySelector('button[aria-label="Diagnostic failed"]'),
-      eol.DEFAULT_TIMEOUT_MS,
+      core.DEFAULT_TIMEOUT_MS,
       shouldStop
     );
 
@@ -93,11 +91,11 @@ window.MESMRI = {
       throw new Error("Diagnostic failed button not found");
     }
 
-    if (eol.isDisabled(failedButton)) {
+    if (core.isDisabled(failedButton)) {
       throw new Error("Diagnostic failed button is disabled");
     }
 
-    await this.fastClick(failedButton, shouldStop);
+    await core.dispatchClick(failedButton, 75, 300, shouldStop);
 
     await this.completeFailureReasonDialog(shouldStop);
 
@@ -113,10 +111,10 @@ window.MESMRI = {
   // logPrefix only affects log wording; it defaults so MRI (FAIL) output is
   // unchanged.
   async completeFailureReasonDialog(shouldStop, logPrefix = "MRI (FAIL)") {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
     const log = window.MESLogger.log;
 
-    const dialog = await this.waitForFailureElement(
+    const dialog = await core.waitForScoped(
       () => this.findFailureReasonDialog(),
       MRI_FAIL_DIALOG_TIMEOUT_MS,
       shouldStop
@@ -128,7 +126,7 @@ window.MESMRI = {
 
     log(`${logPrefix}: Diagnostic failure dialog opened`);
 
-    const combobox = await this.waitForFailureElement(
+    const combobox = await core.waitForScoped(
       () =>
         dialog.querySelector(
           'button[role="combobox"][aria-haspopup="listbox"]'
@@ -141,7 +139,7 @@ window.MESMRI = {
       throw new Error("Failure reason combobox not found");
     }
 
-    if (eol.isDisabled(combobox)) {
+    if (core.isDisabled(combobox)) {
       throw new Error("Failure reason combobox is disabled");
     }
 
@@ -158,7 +156,7 @@ window.MESMRI = {
         })
       );
 
-      const expanded = await this.waitForFailureElement(
+      const expanded = await core.waitForScoped(
         () =>
           combobox.getAttribute("aria-expanded") === "true" ? combobox : null,
         MRI_FAIL_DIALOG_TIMEOUT_MS,
@@ -184,7 +182,7 @@ window.MESMRI = {
       return (listbox || document).querySelector(optionSelector);
     };
 
-    const option = await this.waitForFailureElement(
+    const option = await core.waitForScoped(
       findOption,
       MRI_FAIL_OPTION_TIMEOUT_MS,
       shouldStop
@@ -197,12 +195,12 @@ window.MESMRI = {
     // Multiselect listbox: only click when not already selected so we never
     // toggle the intended reason back off.
     if (!this.isOptionSelected(option)) {
-      await this.fastClick(option, shouldStop);
+      await core.dispatchClick(option, 75, 300, shouldStop);
     }
 
     // Verify selection, preferring aria-selected, then the combobox display,
     // then the nested checkbox (covered by isOptionSelected).
-    const confirmedSelection = await this.waitForFailureElement(
+    const confirmedSelection = await core.waitForScoped(
       () =>
         this.isOptionSelected(option) ||
         (combobox.textContent || "").includes(MRI_FAIL_REASON_LABEL)
@@ -218,7 +216,7 @@ window.MESMRI = {
 
     log(`${logPrefix}: Selected ${MRI_FAIL_REASON_LABEL}`);
 
-    const confirmButton = await this.waitForFailureElement(
+    const confirmButton = await core.waitForScoped(
       () => dialog.querySelector('button[aria-label="Confirm failure"]'),
       MRI_FAIL_DIALOG_TIMEOUT_MS,
       shouldStop
@@ -228,8 +226,8 @@ window.MESMRI = {
       throw new Error("Confirm failure button not found");
     }
 
-    const enabledConfirm = await this.waitForFailureElement(
-      () => (!eol.isDisabled(confirmButton) ? confirmButton : null),
+    const enabledConfirm = await core.waitForScoped(
+      () => (!core.isDisabled(confirmButton) ? confirmButton : null),
       MRI_FAIL_DIALOG_TIMEOUT_MS,
       shouldStop
     );
@@ -238,9 +236,9 @@ window.MESMRI = {
       throw new Error("Confirm failure button remained disabled");
     }
 
-    await this.fastClick(confirmButton, shouldStop);
+    await core.dispatchClick(confirmButton, 75, 300, shouldStop);
 
-    const dialogClosed = await this.waitForFailureElement(
+    const dialogClosed = await core.waitForScoped(
       () => (this.findFailureReasonDialog() ? null : true),
       MRI_FAIL_DIALOG_TIMEOUT_MS,
       shouldStop
@@ -258,12 +256,12 @@ window.MESMRI = {
   // defaults to the MRI (FAIL) constant so existing behavior is unchanged; the
   // Repair mode passes its configured locator.
   async completeMoveToRepair(shouldStop, repairLocation = MRI_FAIL_REPAIR_LOCATION) {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
     const log = window.MESLogger.log;
 
-    const locationInput = await this.waitForFailureElement(
+    const locationInput = await core.waitForScoped(
       () => this.findMoveToRepairInput(),
-      eol.DEFAULT_TIMEOUT_MS,
+      core.DEFAULT_TIMEOUT_MS,
       shouldStop
     );
 
@@ -271,7 +269,7 @@ window.MESMRI = {
       throw new Error("Move to Repair location input not found");
     }
 
-    eol.throwIfStopped(shouldStop);
+    core.throwIfStopped(shouldStop);
     locationInput.focus();
 
     // Set the value React-compatibly (same technique as typeAndSubmit) without
@@ -287,9 +285,9 @@ window.MESMRI = {
     nativeSetter.call(locationInput, repairLocation);
     locationInput.dispatchEvent(new Event("input", { bubbles: true }));
 
-    const suggestion = await this.waitForFailureElement(
+    const suggestion = await core.waitForScoped(
       () => this.findRepairLocationSuggestion(locationInput, repairLocation),
-      eol.DEFAULT_TIMEOUT_MS,
+      core.DEFAULT_TIMEOUT_MS,
       shouldStop
     );
 
@@ -297,11 +295,11 @@ window.MESMRI = {
       throw new Error("Move to Repair location suggestion did not appear");
     }
 
-    await this.fastClick(suggestion, shouldStop);
+    await core.dispatchClick(suggestion, 75, 300, shouldStop);
 
     log("MRI (FAIL): Selected repair location");
 
-    const confirmMove = await this.waitForFailureElement(
+    const confirmMove = await core.waitForScoped(
       () => document.querySelector('button[aria-label="Confirm move"]'),
       MRI_FAIL_DIALOG_TIMEOUT_MS,
       shouldStop
@@ -311,8 +309,8 @@ window.MESMRI = {
       throw new Error("Confirm move button not found");
     }
 
-    const enabledMove = await this.waitForFailureElement(
-      () => (!eol.isDisabled(confirmMove) ? confirmMove : null),
+    const enabledMove = await core.waitForScoped(
+      () => (!core.isDisabled(confirmMove) ? confirmMove : null),
       MRI_FAIL_DIALOG_TIMEOUT_MS,
       shouldStop
     );
@@ -321,9 +319,9 @@ window.MESMRI = {
       throw new Error("Confirm move button never enabled");
     }
 
-    await this.fastClick(confirmMove, shouldStop);
+    await core.dispatchClick(confirmMove, 75, 300, shouldStop);
 
-    const advanced = await this.waitForFailureElement(
+    const advanced = await core.waitForScoped(
       () =>
         document.querySelector('button[aria-label="Confirm move"]')
           ? null
@@ -340,7 +338,7 @@ window.MESMRI = {
   },
 
   findMoveToRepairInput() {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
 
     // Innermost container that mentions the step and holds an input, matching
     // the scoping approach used by findFailureReasonDialog.
@@ -348,7 +346,7 @@ window.MESMRI = {
       ...document.querySelectorAll("div, section, form")
     ].filter((element) => {
       return (
-        eol.isVisible(element) &&
+        core.isVisible(element) &&
         /Move to Repair/i.test(element.innerText || "") &&
         element.querySelector("input, textarea")
       );
@@ -366,8 +364,8 @@ window.MESMRI = {
       [...root.querySelectorAll("input, textarea")].find((input) => {
         return (
           input.type !== "hidden" &&
-          eol.isVisible(input) &&
-          !eol.isDisabled(input)
+          core.isVisible(input) &&
+          !core.isDisabled(input)
         );
       }) || null
     );
@@ -377,7 +375,7 @@ window.MESMRI = {
     locationInput,
     repairLocation = MRI_FAIL_REPAIR_LOCATION
   ) {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
 
     // Resolve the popup owned by the locator input (its id is dynamic and read
     // at runtime); fall back to the first document listbox only if the input
@@ -398,13 +396,14 @@ window.MESMRI = {
     return (
       [...listbox.querySelectorAll('[role="option"]')].find(
         (option) =>
-          eol.isVisible(option) &&
+          core.isVisible(option) &&
           (option.textContent || "").includes(repairLocation)
       ) || null
     );
   },
 
   findFailureReasonDialog() {
+    const core = window.MESCore;
     const heading = "Select failure reason";
 
     // Prefer a proper role="dialog" container when the page provides one.
@@ -423,7 +422,7 @@ window.MESMRI = {
       ...document.querySelectorAll("div, section, form")
     ].filter((element) => {
       return (
-        window.MESEOL.isVisible(element) &&
+        core.isVisible(element) &&
         (element.textContent || "").includes(heading) &&
         (element.querySelector('button[aria-label="Confirm failure"]') ||
           element.querySelector(
@@ -448,67 +447,10 @@ window.MESMRI = {
     );
   },
 
-  // Scoped poller for the failure dialog. Unlike eol.waitForElement it does not
-  // run closePopupIfPresent, which would click the dialog's Cancel/Close button
-  // and dismiss the modal we are interacting with. Returns null on timeout so
-  // callers can raise a specific error.
-  async waitForFailureElement(findFn, timeoutMs, shouldStop) {
-    const eol = window.MESEOL;
-    const start = Date.now();
-
-    while (Date.now() - start < timeoutMs) {
-      eol.throwIfStopped(shouldStop);
-
-      const result = findFn();
-
-      if (result) {
-        return result;
-      }
-
-      await eol.sleep(MRI_FAIL_POLL_MS, shouldStop);
-    }
-
-    return null;
-  },
-
-  async fastClick(element, shouldStop) {
-    const eol = window.MESEOL;
-
-    eol.throwIfStopped(shouldStop);
-
-    element.scrollIntoView({ block: "center", inline: "center" });
-
-    await eol.sleep(75, shouldStop);
-
-    eol.throwIfStopped(shouldStop);
-
-    element.focus();
-
-    const rect = element.getBoundingClientRect();
-
-    const clickOptions = {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-      clientX: rect.left + rect.width / 2,
-      clientY: rect.top + rect.height / 2
-    };
-
-    element.dispatchEvent(new MouseEvent("mouseover", clickOptions));
-    element.dispatchEvent(new MouseEvent("mousedown", clickOptions));
-
-    eol.throwIfStopped(shouldStop);
-
-    element.dispatchEvent(new MouseEvent("mouseup", clickOptions));
-    element.dispatchEvent(new MouseEvent("click", clickOptions));
-
-    await eol.sleep(MRI_SETTLE_MS, shouldStop);
-  },
-
   async waitForStepInput(stepName, shouldStop) {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
 
-    return eol.waitForElement(() => {
+    return core.waitForElement(() => {
       const sections = [...document.querySelectorAll("div, section, form")];
 
       const stepSection = sections.find((section) => {
@@ -523,10 +465,10 @@ window.MESMRI = {
 
         return (
           /Scan asset tag or serial number/i.test(placeholder) &&
-          eol.isVisible(input) &&
-          !eol.isDisabled(input)
+          core.isVisible(input) &&
+          !core.isDisabled(input)
         );
       });
-    }, eol.DEFAULT_TIMEOUT_MS, shouldStop);
+    }, core.DEFAULT_TIMEOUT_MS, shouldStop);
   }
 };

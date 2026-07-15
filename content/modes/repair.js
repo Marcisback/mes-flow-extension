@@ -18,7 +18,7 @@ window.MESRepair = {
   // options.repairLocator: Move to Repair location; defaults to the standard
   // repair locator when unset.
   async processAsset(asset, shouldStop, options = {}) {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
     const mri = window.MESMRI;
     const log = window.MESLogger.log;
 
@@ -26,7 +26,7 @@ window.MESRepair = {
     const repairLocator =
       (options.repairLocator || "").trim() || REPAIR_DEFAULT_LOCATOR;
 
-    eol.throwIfStopped(shouldStop);
+    core.throwIfStopped(shouldStop);
     await window.MESPopupHandler.closePopupIfPresent();
 
     // Load the asset through the landing scan when it is present. This is
@@ -35,8 +35,8 @@ window.MESRepair = {
     const landingScan = this.findLandingScanInput();
 
     if (landingScan) {
-      await eol.typeAndSubmit(landingScan, asset, shouldStop);
-      await eol.sleep(REPAIR_SETTLE_MS, shouldStop);
+      await core.typeAndSubmit(landingScan, asset, shouldStop);
+      await core.sleep(REPAIR_SETTLE_MS, shouldStop);
       await window.MESPopupHandler.closePopupIfPresent();
     }
 
@@ -59,7 +59,7 @@ window.MESRepair = {
     const repairInput = this.findRepairInput();
 
     if (repairInput) {
-      await eol.typeAndSubmit(repairInput, asset, shouldStop);
+      await core.typeAndSubmit(repairInput, asset, shouldStop);
       await window.MESPopupHandler.closePopupIfPresent();
     }
 
@@ -69,23 +69,22 @@ window.MESRepair = {
       await this.completeRepairConfirmed(shouldStop);
     }
 
-    eol.throwIfStopped(shouldStop);
+    core.throwIfStopped(shouldStop);
     log(`Done: ${asset}`);
   },
 
   // Repair Confirmed: click Confirm Repair, then wait for the page to advance.
   async completeRepairConfirmed(shouldStop) {
-    const eol = window.MESEOL;
-    const mri = window.MESMRI;
+    const core = window.MESCore;
     const log = window.MESLogger.log;
 
-    const confirmRepair = await eol.waitForClickableByText(
+    const confirmRepair = await core.waitForClickableByText(
       this.selectors.confirmRepairText,
-      eol.DEFAULT_TIMEOUT_MS,
+      core.DEFAULT_TIMEOUT_MS,
       shouldStop
     );
 
-    await mri.fastClick(confirmRepair, shouldStop);
+    await core.dispatchClick(confirmRepair, 75, 300, shouldStop);
     await this.waitForConfirmRepairToClear(shouldStop);
 
     log("Repair: Confirmed");
@@ -96,17 +95,17 @@ window.MESRepair = {
   // (Variant 1). Variant 2 has no Confirm Repair, so completion follows the
   // failure confirmation directly.
   async completeRepairFailed(shouldStop) {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
     const mri = window.MESMRI;
     const log = window.MESLogger.log;
 
-    const repairFailedButton = await eol.waitForClickableByText(
+    const repairFailedButton = await core.waitForClickableByText(
       this.selectors.repairFailedText,
-      eol.DEFAULT_TIMEOUT_MS,
+      core.DEFAULT_TIMEOUT_MS,
       shouldStop
     );
 
-    await mri.fastClick(repairFailedButton, shouldStop);
+    await core.dispatchClick(repairFailedButton, 75, 300, shouldStop);
 
     // Reuse the MRI (FAIL) failure-reason dialog verbatim (dialog detection,
     // Phone - Display selection, Confirm Failure and verification).
@@ -115,7 +114,7 @@ window.MESRepair = {
     const confirmRepair = await this.waitForOptionalConfirmRepair(shouldStop);
 
     if (confirmRepair) {
-      await mri.fastClick(confirmRepair, shouldStop);
+      await core.dispatchClick(confirmRepair, 75, 300, shouldStop);
       await this.waitForConfirmRepairToClear(shouldStop);
       log("Repair: Failure confirmed and repair confirmed");
     } else {
@@ -141,13 +140,13 @@ window.MESRepair = {
   },
 
   async waitForEntryStage(shouldStop) {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
     const start = Date.now();
 
-    while (Date.now() - start < eol.DEFAULT_TIMEOUT_MS) {
-      eol.throwIfStopped(shouldStop);
+    while (Date.now() - start < core.DEFAULT_TIMEOUT_MS) {
+      core.throwIfStopped(shouldStop);
       await window.MESPopupHandler.closePopupIfPresent();
-      eol.throwIfStopped(shouldStop);
+      core.throwIfStopped(shouldStop);
 
       if (this.isMoveToRepairStage()) {
         return "moveToRepair";
@@ -157,7 +156,7 @@ window.MESRepair = {
         return "repairStarted";
       }
 
-      await eol.sleep(REPAIR_POLL_MS, shouldStop);
+      await core.sleep(REPAIR_POLL_MS, shouldStop);
     }
 
     throw new Error(
@@ -166,19 +165,19 @@ window.MESRepair = {
   },
 
   async waitForRepairStartedStage(shouldStop) {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
     const start = Date.now();
 
-    while (Date.now() - start < eol.DEFAULT_TIMEOUT_MS) {
-      eol.throwIfStopped(shouldStop);
+    while (Date.now() - start < core.DEFAULT_TIMEOUT_MS) {
+      core.throwIfStopped(shouldStop);
       await window.MESPopupHandler.closePopupIfPresent();
-      eol.throwIfStopped(shouldStop);
+      core.throwIfStopped(shouldStop);
 
       if (this.isRepairStartedStage()) {
         return true;
       }
 
-      await eol.sleep(REPAIR_POLL_MS, shouldStop);
+      await core.sleep(REPAIR_POLL_MS, shouldStop);
     }
 
     throw new Error("Repair Started stage did not appear after Move to Repair");
@@ -187,13 +186,13 @@ window.MESRepair = {
   // Poll a bounded window for an enabled Confirm Repair button. Returns null
   // (never throws) so the Variant 2 "Repair Failed only" page completes cleanly.
   async waitForOptionalConfirmRepair(shouldStop) {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
     const start = Date.now();
 
     while (Date.now() - start < REPAIR_OPTIONAL_CONFIRM_TIMEOUT_MS) {
-      eol.throwIfStopped(shouldStop);
+      core.throwIfStopped(shouldStop);
       await window.MESPopupHandler.closePopupIfPresent();
-      eol.throwIfStopped(shouldStop);
+      core.throwIfStopped(shouldStop);
 
       const confirmRepair = this.findConfirmRepairButton(true);
 
@@ -201,14 +200,14 @@ window.MESRepair = {
         return confirmRepair;
       }
 
-      await eol.sleep(REPAIR_POLL_MS, shouldStop);
+      await core.sleep(REPAIR_POLL_MS, shouldStop);
     }
 
     return null;
   },
 
   async waitForConfirmRepairToClear(shouldStop) {
-    const advanced = await window.MESMRI.waitForFailureElement(
+    const advanced = await window.MESCore.waitForScoped(
       () => (this.findConfirmRepairButton(false) ? null : true),
       REPAIR_ADVANCE_TIMEOUT_MS,
       shouldStop
@@ -220,34 +219,34 @@ window.MESRepair = {
   },
 
   findLandingScanInput() {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
 
     return (
       [...document.querySelectorAll("input, textarea")].find((input) => {
         return (
-          eol.selectors.firstScanText.test(input.placeholder || "") &&
-          eol.isVisible(input)
+          core.selectors.firstScanText.test(input.placeholder || "") &&
+          core.isVisible(input)
         );
       }) || null
     );
   },
 
   findConfirmMoveButton() {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
     const button = document.querySelector('button[aria-label="Confirm move"]');
 
-    return button && eol.isVisible(button) ? button : null;
+    return button && core.isVisible(button) ? button : null;
   },
 
   findConfirmRepairButton(requireClickable) {
-    const eol = window.MESEOL;
+    const core = window.MESCore;
 
     return (
-      [...document.querySelectorAll(this.buttonSelector())].find((button) => {
+      [...document.querySelectorAll(core.buttonSelector())].find((button) => {
         return (
-          this.selectors.confirmRepairText.test(this.getElementText(button)) &&
-          eol.isVisible(button) &&
-          (!requireClickable || !eol.isDisabled(button))
+          this.selectors.confirmRepairText.test(core.getElementText(button)) &&
+          core.isVisible(button) &&
+          (!requireClickable || !core.isDisabled(button))
         );
       }) || null
     );
@@ -264,19 +263,5 @@ window.MESRepair = {
 
   findRepairFailedButton(requireClickable) {
     return window.MESRepairCleanup.findRepairFailedButton(requireClickable) || null;
-  },
-
-  buttonSelector() {
-    return "button, [role='button'], input[type='button'], input[type='submit']";
-  },
-
-  getElementText(element) {
-    return (
-      element.innerText ||
-      element.textContent ||
-      element.value ||
-      element.getAttribute("aria-label") ||
-      ""
-    ).trim();
   }
 };
