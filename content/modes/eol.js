@@ -1,16 +1,17 @@
-// EOL mode workflow. The shared toolkit now lives in content/shared/core.js
-// (MESCore); this file only describes the EOL step sequence.
+// EOL mode workflow. The shared toolkit lives in MESCore and stage detection in
+// MESEolState; this file only describes the EOL step sequence.
 window.MESEOL = {
   async processAsset(asset, shouldStop) {
     const core = window.MESCore;
+    const state = window.MESEolState;
     const log = window.MESLogger.log;
 
     core.throwIfStopped(shouldStop);
 
     await window.MESPopupHandler.closePopupIfPresent();
 
-    const scan1 = await core.waitForInputByPlaceholderRegex(
-      core.selectors.firstScanText,
+    const scan1 = await core.waitForElement(
+      () => state.findFirstScanInput(),
       core.DEFAULT_TIMEOUT_MS,
       shouldStop
     );
@@ -22,8 +23,8 @@ window.MESEOL = {
 
     core.throwIfStopped(shouldStop);
 
-    const startButton = await core.waitForClickableByText(
-      core.selectors.startButtonText,
+    const startButton = await core.waitForElement(
+      () => state.findStartButton(),
       core.DEFAULT_TIMEOUT_MS,
       shouldStop
     );
@@ -35,8 +36,8 @@ window.MESEOL = {
 
     await window.MESPopupHandler.closePopupIfPresent();
 
-    const scan2 = await core.waitForInputByPlaceholderExact(
-      core.selectors.secondScanPlaceholder,
+    const scan2 = await core.waitForElement(
+      () => state.findSecondScanInput(),
       core.DEFAULT_TIMEOUT_MS,
       shouldStop
     );
@@ -48,8 +49,8 @@ window.MESEOL = {
 
     await window.MESPopupHandler.closePopupIfPresent();
 
-    const confirmButton = await core.waitForClickableByText(
-      core.selectors.confirmWipeText,
+    const confirmButton = await core.waitForElement(
+      () => state.findConfirmWipeButton(),
       core.DEFAULT_TIMEOUT_MS,
       shouldStop
     );
