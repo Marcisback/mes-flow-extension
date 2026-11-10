@@ -1,3 +1,9 @@
+// Shared content-script toolkit. Every mode, state detector, and workflow
+// helper depends on this module, so it must load before them (see manifest
+// order). This is a verbatim extraction of the former MESEOL toolkit, with the
+// three per-mode click implementations unified into a single dispatchClick that
+// takes the pre/post delays as arguments so each caller keeps its exact timing.
+
 class MESStopError extends Error {
   constructor(message = "Stop requested") {
     super(message);
@@ -5,7 +11,14 @@ class MESStopError extends Error {
   }
 }
 
-window.MESEOL = {
+// Poll interval for the scoped poller (waitForScoped). Matches the former
+// MRI_FAIL_POLL_MS so failure-dialog polling cadence is unchanged.
+const CORE_SCOPED_POLL_MS = 150;
+
+// Poll interval for the popup-closing poller (waitForElement).
+const CORE_ELEMENT_POLL_MS = 250;
+
+window.MESCore = {
   DEFAULT_TIMEOUT_MS: 15000,
   STOP_CHECK_INTERVAL_MS: 100,
 
@@ -14,68 +27,6 @@ window.MESEOL = {
     secondScanPlaceholder: "Scan asset tag or serial number",
     startButtonText: /^Start$/i,
     confirmWipeText: /Confirm\s+wipe/i
-  },
-
-  async processAsset(asset, shouldStop) {
-    const log = window.MESLogger.log;
-
-    this.throwIfStopped(shouldStop);
-
-    await window.MESPopupHandler.closePopupIfPresent();
-
-    const scan1 = await this.waitForInputByPlaceholderRegex(
-      this.selectors.firstScanText,
-      this.DEFAULT_TIMEOUT_MS,
-      shouldStop
-    );
-
-    await this.typeAndSubmit(scan1, asset, shouldStop);
-    await this.sleep(1200, shouldStop);
-
-    await window.MESPopupHandler.closePopupIfPresent();
-
-    this.throwIfStopped(shouldStop);
-
-    const startButton = await this.waitForClickableByText(
-      this.selectors.startButtonText,
-      this.DEFAULT_TIMEOUT_MS,
-      shouldStop
-    );
-
-    await this.safeClick(startButton, shouldStop);
-    await this.sleep(700, shouldStop);
-
-    this.throwIfStopped(shouldStop);
-
-    await window.MESPopupHandler.closePopupIfPresent();
-
-    const scan2 = await this.waitForInputByPlaceholderExact(
-      this.selectors.secondScanPlaceholder,
-      this.DEFAULT_TIMEOUT_MS,
-      shouldStop
-    );
-
-    await this.typeAndSubmit(scan2, asset, shouldStop);
-    await this.sleep(700, shouldStop);
-
-    this.throwIfStopped(shouldStop);
-
-    await window.MESPopupHandler.closePopupIfPresent();
-
-    const confirmButton = await this.waitForClickableByText(
-      this.selectors.confirmWipeText,
-      this.DEFAULT_TIMEOUT_MS,
-      shouldStop
-    );
-
-    await this.safeClick(confirmButton, shouldStop);
-    await this.sleep(1200, shouldStop);
-
-    await window.MESPopupHandler.closePopupIfPresent();
-
-    this.throwIfStopped(shouldStop);
-
-    log(`Done: ${asset}`);
   },
 
   async typeAndSubmit(input, value, shouldStop) {
@@ -147,32 +98,25 @@ window.MESEOL = {
     shouldStop
   ) {
     return this.waitForElement(() => {
-      const candidates = [
-        ...document.querySelectorAll(
-          "button, [role='button'], input[type='button'], input[type='submit']"
-        )
-      ];
+      const candidates = [...document.querySelectorAll(this.buttonSelector())];
 
       return candidates.find((el) => {
-        const text = (
-          el.innerText ||
-          el.textContent ||
-          el.value ||
-          el.getAttribute("aria-label") ||
-          ""
-        ).trim();
+        const text = this.getElementText(el);
 
         return regex.test(text) && this.isVisible(el) && !this.isDisabled(el);
       });
     }, timeoutMs, shouldStop);
   },
 
-  async safeClick(element, shouldStop) {
+  // Unified click. Formerly EOL.safeClick (150/350), MRI.fastClick (75/300) and
+  // RepairCleanup.fastClick (150/150); the event sequence is identical across
+  // all three, so callers now pass their own pre/post delays.
+  async dispatchClick(element, preMs, postMs, shouldStop) {
     this.throwIfStopped(shouldStop);
 
     element.scrollIntoView({ block: "center", inline: "center" });
 
-    await this.sleep(150, shouldStop);
+    await this.sleep(preMs, shouldStop);
 
     this.throwIfStopped(shouldStop);
 
@@ -196,9 +140,11 @@ window.MESEOL = {
     element.dispatchEvent(new MouseEvent("mouseup", clickOptions));
     element.dispatchEvent(new MouseEvent("click", clickOptions));
 
-    await this.sleep(350, shouldStop);
+    await this.sleep(postMs, shouldStop);
   },
 
+  // Popup-closing poller: runs closePopupIfPresent each tick and throws on
+  // timeout. Use for normal page elements.
   async waitForElement(findFn, timeoutMs, shouldStop) {
     const start = Date.now();
 
@@ -215,10 +161,32 @@ window.MESEOL = {
         return element;
       }
 
-      await this.sleep(250, shouldStop);
+      await this.sleep(CORE_ELEMENT_POLL_MS, shouldStop);
     }
 
     throw new Error(`Timed out after ${timeoutMs / 1000}s waiting for element`);
+  },
+
+  // Scoped poller (formerly MRI.waitForFailureElement). Unlike waitForElement it
+  // does NOT run closePopupIfPresent, which would click a modal's Cancel/Close
+  // button and dismiss the dialog we are interacting with. Returns null on
+  // timeout so callers can raise a specific error.
+  async waitForScoped(findFn, timeoutMs, shouldStop) {
+    const start = Date.now();
+
+    while (Date.now() - start < timeoutMs) {
+      this.throwIfStopped(shouldStop);
+
+      const result = findFn();
+
+      if (result) {
+        return result;
+      }
+
+      await this.sleep(CORE_SCOPED_POLL_MS, shouldStop);
+    }
+
+    return null;
   },
 
   throwIfStopped(shouldStop) {
@@ -245,6 +213,20 @@ window.MESEOL = {
       element.getAttribute("aria-disabled") === "true" ||
       element.classList.contains("disabled")
     );
+  },
+
+  buttonSelector() {
+    return "button, [role='button'], input[type='button'], input[type='submit']";
+  },
+
+  getElementText(element) {
+    return (
+      element.innerText ||
+      element.textContent ||
+      element.value ||
+      element.getAttribute("aria-label") ||
+      ""
+    ).trim();
   },
 
   async sleep(ms, shouldStop) {

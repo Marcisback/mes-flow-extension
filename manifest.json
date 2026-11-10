@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MES Flow Assistant",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Automates MES EOL and MRI reverse-triage workflows.",
   "permissions": ["storage", "tabs", "activeTab"],
   "host_permissions": [
@@ -22,14 +22,21 @@
         "https://www.internalfb.com/inventory/manufacturing/reverse/triage*"
       ],
       "js": [
-        "shared/logger.js",
-        "shared/storage.js",
-        "shared/queue.js",
-        "content/popup-handler.js",
-        "content/eol.js",
-        "content/mri.js",
-        "content/repair-cleanup.js",
-        "content/repair.js",
+        "content/shared/logger.js",
+        "content/shared/storage.js",
+        "content/shared/popup-handler.js",
+        "content/shared/core.js",
+        "content/state/shared-state.js",
+        "content/shared/locator-selector.js",
+        "content/shared/move-to-repair.js",
+        "content/shared/failure-dialog.js",
+        "content/state/repair-state.js",
+        "content/state/mri-state.js",
+        "content/state/eol-state.js",
+        "content/modes/eol.js",
+        "content/modes/mri.js",
+        "content/modes/repair-cleanup.js",
+        "content/modes/repair.js",
         "content/mes-runner.js"
       ],
       "run_at": "document_idle"
